@@ -19,7 +19,6 @@ class TakePhotoPatroliView extends StatelessWidget {
         child: Column(
           children: [
             // ================= 1. HEADER =================
-            // Menggunakan Padding proporsional, bukan fixed 30
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
               child: Column(
@@ -36,7 +35,7 @@ class TakePhotoPatroliView extends StatelessWidget {
                   Text(
                     "Ambil Gambar Lokasi Patroli",
                     style: TextStyle(
-                      fontSize: 14, // Sedikit dikecilkan agar aman di HP kecil
+                      fontSize: 14,
                       fontWeight: FontWeight.w500, 
                       color: primaryColor
                     ),
@@ -46,39 +45,37 @@ class TakePhotoPatroliView extends StatelessWidget {
             ),
 
             // ================= 2. CAMERA PREVIEW (FLEXIBLE) =================
-            // Expanded membuat widget ini mengisi SISA RUANG yang ada
             Expanded(
               child: Container(
                 width: double.infinity,
-                margin: const EdgeInsets.symmetric(horizontal: 20), // Margin kiri kanan
+                margin: const EdgeInsets.symmetric(horizontal: 20), 
                 decoration: BoxDecoration(
                   color: Colors.black,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: primaryColor, width: 2),
                 ),
-                clipBehavior: Clip.hardEdge, // Memotong kamera agar sesuai radius
+                clipBehavior: Clip.hardEdge, 
                 child: Obx(() {
                   if (!controller.isCameraInitialized.value) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  // LOGIKA AGAR GAMBAR TIDAK GEPENG
                   return Stack(
                     alignment: Alignment.center,
-                    fit: StackFit.expand, // Memaksa anak mengisi container
+                    fit: StackFit.expand, 
                     children: [
                       if (controller.photoTaken.value)
                         // Tampilan Hasil Foto
                         Image.file(
                           File(controller.photoPath.value), 
-                          fit: BoxFit.cover // Zoom to fill (agar full)
+                          fit: BoxFit.cover,
+                          cacheWidth: 600,
                         )
                       else
                         // Tampilan Kamera Live
                         FittedBox(
-                          fit: BoxFit.cover, // KUNCI RESPONSIF: Zoom kamera agar penuh kotak
+                          fit: BoxFit.cover, 
                           child: SizedBox(
-                            // Trik: Tukar width/height previewSize karena sensor HP landscape
                             width: controller.cameraController!.value.previewSize!.height,
                             height: controller.cameraController!.value.previewSize!.width,
                             child: CameraPreview(controller.cameraController!),
@@ -92,12 +89,12 @@ class TakePhotoPatroliView extends StatelessWidget {
 
             // ================= 3. TOMBOL AKSI =================
             Padding(
-              padding: const EdgeInsets.all(20.0), // Padding aman untuk jempol
+              padding: const EdgeInsets.all(20.0), 
               child: Obx(() => SizedBox(
                 width: double.infinity,
                 child: !controller.photoTaken.value
                   ? SizedBox(
-                      height: 50, // Tinggi tombol standar ergonomis
+                      height: 50,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryColor,

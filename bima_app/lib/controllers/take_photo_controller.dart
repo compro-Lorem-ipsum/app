@@ -21,7 +21,6 @@ class TakePhotoController extends GetxController {
   Future<void> initializeCamera() async {
     try {
       final cameras = await availableCameras();
-      // Cari kamera depan (user facing) sesuai React: facingMode: "user"
       final frontCamera = cameras.firstWhere(
         (camera) => camera.lensDirection == CameraLensDirection.front,
         orElse: () => cameras.first,

@@ -34,7 +34,6 @@ class MyApp extends StatelessWidget {
         GetPage(
           name: '/report-patroli', 
           page: () => const ReportPatroliView(),
-          // BINDING: Ini yang membuat Controller HIDUP sebelum View dibuka
           binding: BindingsBuilder(() {
             Get.put(ReportPatroliController());
           }),

@@ -53,6 +53,7 @@ class VerificationView extends StatelessWidget {
                         child: Image.file(
                           File(controller.photoPath.value),
                           fit: BoxFit.cover,
+                          cacheWidth: 600,
                         ),
                       ),
                   ),

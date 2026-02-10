@@ -65,6 +65,7 @@ class ReportPatroliView extends GetView<ReportPatroliController> {
                               ? Image.file(
                                   File(path),
                                   fit: BoxFit.cover,
+                                  cacheWidth: 600,
                                 )
                               : const Center(
                                   child: Text(

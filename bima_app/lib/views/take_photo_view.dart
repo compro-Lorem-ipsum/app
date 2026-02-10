@@ -14,7 +14,7 @@ class TakePhotoView extends StatelessWidget {
     const primaryColor = Color(0xFF122C93);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF), // Tambahkan background agar rapi
+      backgroundColor: const Color(0xFFF5F7FF),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(40.0),
@@ -47,14 +47,9 @@ class TakePhotoView extends StatelessWidget {
               // --- AREA FOTO (CORE FIX) ---
               Obx(() {
                 // 1. Ambil Aspect Ratio Kamera (biasanya 4/3 atau 16/9)
-                // Jika belum init, pakai default 1 (persegi)
                 var cameraAspectRatio = controller.isCameraInitialized.value
                     ? controller.cameraController!.value.aspectRatio
                     : 1.0;
-
-                // Trik: Karena kamera HP di mode portrait seringkali rasionya terbalik (1/aspectRatio)
-                // Kita perlu memastikan rasionya < 1 (lebar < tinggi) untuk portrait, atau > 1 untuk landscape.
-                // Namun, FittedBox dengan BoxFit.cover biasanya menangani ini secara otomatis asalkan child-nya punya dimensi yang benar.
 
                 return Column(
                   children: [
@@ -62,28 +57,23 @@ class TakePhotoView extends StatelessWidget {
                       width: 300,
                       height: 300,
                       decoration: BoxDecoration(
-                        color: Colors.black, // Background hitam agar pro
+                        color: Colors.black, 
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: primaryColor,
                           width: 2,
                         ),
                       ),
-                      // Clip.hardEdge PENTING agar zoom kamera tidak keluar dari border radius
                       clipBehavior: Clip.hardEdge, 
                       child: Stack(
                         alignment: Alignment.center,
-                        fit: StackFit.expand, // Paksa children memenuhi stack
+                        fit: StackFit.expand, 
                         children: [
                           if (!controller.photoTaken.value)
                             controller.isCameraInitialized.value
                                 ? FittedBox(
-                                    // --- KUNCI UTAMA: BoxFit.cover ---
-                                    // Ini akan men-zoom gambar agar kotak penuh tanpa gepeng
                                     fit: BoxFit.cover,
                                     child: SizedBox(
-                                      // Kita buat kotak bayangan sesuai rasio asli kamera
-                                      // Width fix, Height menyesuaikan rasio
                                       width: 100, 
                                       height: 100 * cameraAspectRatio, 
                                       child: Transform(
@@ -95,13 +85,12 @@ class TakePhotoView extends StatelessWidget {
                                   )
                                 : const Center(child: CircularProgressIndicator())
                           else
-                            // Tampilan Hasil Foto
                             Transform(
                               alignment: Alignment.center,
                               transform: Matrix4.rotationY(math.pi),
                               child: Image.file(
                                 File(controller.photoPath.value),
-                                fit: BoxFit.cover, // Hasil foto juga harus cover
+                                fit: BoxFit.cover, 
                                 width: double.infinity,
                                 height: double.infinity,
                               ),

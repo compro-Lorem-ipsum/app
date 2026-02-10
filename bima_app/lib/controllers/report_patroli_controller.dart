@@ -70,7 +70,7 @@ class ReportPatroliController extends GetxController {
     // Jika kamera mengembalikan path foto
     if (result != null && result is String) {
       photos[index] = result;
-      photos.refresh(); // Wajib agar GridView update
+      photos.refresh(); 
     }
   }
 
@@ -199,7 +199,7 @@ class ReportPatroliController extends GetxController {
     }
   }
 
-  // ===== MODAL (SAMA DENGAN VITE) =====
+  // ===== MODAL =====
   void showModal() {
     Get.dialog(
       Dialog(

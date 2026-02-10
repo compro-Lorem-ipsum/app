@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:geolocator/geolocator.dart';  // Jangan lupa add: flutter pub add geolocator
+import 'package:geolocator/geolocator.dart'; 
 
 // --- KONFIGURASI API ---
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -46,7 +46,6 @@ class VerificationController extends GetxController {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        // Bisa trigger dialog minta nyalakan GPS disini jika mau
         return;
       }
 
@@ -60,7 +59,7 @@ class VerificationController extends GetxController {
 
       // Ambil posisi (High Accuracy)
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high
+        desiredAccuracy: LocationAccuracy.medium
       );
 
       latitude.value = position.latitude.toString();
@@ -76,8 +75,6 @@ class VerificationController extends GetxController {
   Future<void> confirmAttendance() async {
     // 3. FINAL CHECK: Sebelum submit, pastikan lokasi sudah ada
     if (_isLocationEmpty()) {
-      // Coba ambil sekali lagi (blocking / tunggu sampai selesai)
-      // Tampilkan loading sebentar jika perlu, atau blocking await
       Get.dialog(const Center(child: CircularProgressIndicator()), barrierDismissible: false);
       await _getCurrentLocation();
       if (Get.isDialogOpen ?? false) Get.back(); // Tutup loading
