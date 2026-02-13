@@ -268,12 +268,18 @@ class ReportPatroliController extends GetxController {
         const Text("Data patroli berhasil dikirim."),
         const SizedBox(height: 20),
         ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF122C93),
+          ),
           onPressed: () {
-            Get.close(2);
+            Get.close(2); 
             Get.offAllNamed('/');
           },
-          child: const Text("Selesai"),
-        )
+          child: const Text(
+            "Selesai",
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
       ],
     );
   }

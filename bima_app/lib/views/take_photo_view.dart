@@ -76,11 +76,7 @@ class TakePhotoView extends StatelessWidget {
                                     child: SizedBox(
                                       width: 100, 
                                       height: 100 * cameraAspectRatio, 
-                                      child: Transform(
-                                        alignment: Alignment.center,
-                                        transform: Matrix4.rotationY(math.pi), // Mirror
-                                        child: CameraPreview(controller.cameraController!),
-                                      ),
+                                      child: CameraPreview(controller.cameraController!),
                                     ),
                                   )
                                 : const Center(child: CircularProgressIndicator())
