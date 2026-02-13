@@ -230,8 +230,9 @@ class ReportPatroliController extends GetxController {
           Text(alertMessage.value, textAlign: TextAlign.center),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: () => Get.back(),
-            child: const Text("Tutup"),
+            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF122C93)),
+            onPressed: () { Get.back(); },
+            child: const Text("Tutup", style: TextStyle(color: Colors.white)),
           )
         ],
       );
@@ -250,8 +251,9 @@ class ReportPatroliController extends GetxController {
           Text("Maksimal: ${resultData.value?['allowed']}"),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: () => Get.back(),
-            child: const Text("Tutup"),
+            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF122C93)),
+            onPressed: () { Get.back(); },
+            child: const Text("Tutup", style: TextStyle(color: Colors.white)),
           )
         ],
       );
