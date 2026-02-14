@@ -226,16 +226,19 @@ class ReportPatroliController extends GetxController {
     const primaryBlue = Color(0xFF122C93);
     const orange = Color(0xFFF59E0B);
     const orangeDark = Color(0xFFB45309);
-    const red = Color(0xFFA80808);
 
     final isLocationError =
-      resultData.value?['message']?.contains("Location invalid") ?? false;
+      resultData.value?['message']?.contains("Jarak tidak memasuki radius Pos") ?? false;
     
     final isScheduleError = 
       resultData.value?['message']?.contains("Tidak ada jadwal untuk hari ini") ?? false;
 
     if (isScheduleError) {
       alertMessage.value = 'Tidak ada jadwal untuk hari ini';
+    }
+
+    if (isLocationError) {
+      alertMessage.value = 'Jarak tidak memasuki radius Pos';
     }
 
     // ================================
@@ -280,66 +283,6 @@ class ReportPatroliController extends GetxController {
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: orange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              onPressed: () => Get.back(),
-              child: const Text(
-                "Tutup",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // ================================
-    // 🔴 LOCATION ERROR (RED)
-    // ================================
-    if (isLocationError) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            "Lokasi Tidak Valid",
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: red,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            "Posisi Anda terlalu jauh.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Color(0xFFFFF1F2),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Color(0xFFFFE4E6)),
-            ),
-            child: Column(
-              children: [
-                Text("Jarak: ${resultData.value?['distance']}"),
-                Text("Maksimal: ${resultData.value?['allowed']}"),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),
                 ),
