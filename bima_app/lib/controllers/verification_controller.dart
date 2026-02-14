@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart'; 
+import 'package:heroicons/heroicons.dart';
 
 // --- KONFIGURASI API ---
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -118,30 +119,38 @@ class VerificationController extends GetxController {
 
       // --- HANDLING RESPONSE ---
       if (result == null) {
-         showResultDialog(type: 'SERVER_ERROR'); // Response null/kosong
-         return;
+          showResultDialog(type: 'SERVER_ERROR');
+          return;
       }
 
-      String msg = (result['message'] ?? "").toString();
+      // Logic Error Message (Sama persis dengan React TSX)
+      // 1. Lowercase message
+      String msg = (result['message'] ?? "").toString().toLowerCase();
+      // 2. Cek Success (adanya data)
+      bool isSuccess = result['data'] != null;
 
-      if (msg.contains("Location invalid")) {
+      if (isSuccess) {
+        showResultDialog(type: 'SUCCESS');
+      } 
+      // isLocationError (jarak, radius, pos utama)
+      else if (msg.contains("jarak") || msg.contains("radius") || msg.contains("pos utama")) {
         showResultDialog(type: 'LOCATION_INVALID');
       } 
-      else if (msg == "Face not recognized") {
+      // isFaceError (wajah, face)
+      else if (msg.contains("wajah") || msg.contains("face")) {
         showResultDialog(type: 'FACE_MISMATCH');
       }
-      else if (msg == "No schedule found for this Satpam today.") {
+      // isScheduleError (jadwal, terlalu awal, menyelesaikan shift)
+      else if (msg.contains("jadwal") || msg.contains("terlalu awal") || msg.contains("menyelesaikan shift")) {
         showResultDialog(type: 'NO_SCHEDULE');
       }
-      else if (msg.contains("completed your shift")) {
-        showResultDialog(type: 'SHIFT_COMPLETED');
-      }
-      else if (response.statusCode == 200 || response.statusCode == 201) {
-        showResultDialog(type: 'SUCCESS');
+      // isUserError (satpam, user)
+      else if (msg.contains("satpam") || msg.contains("user")) {
+        // Menggunakan tipe yang akan jatuh ke default/error template jika UI khusus belum ada
+        showResultDialog(type: 'USER_ERROR');
       }
       else {
-        // Fallback error message dari server
-        resultData.value = {'message': msg.isEmpty ? "Terjadi kesalahan server" : msg};
+        resultData.value = {'message': msg.isEmpty ? "Terjadi kesalahan server" : result['message']};
         showResultDialog(type: 'SERVER_ERROR');
       }
 
@@ -170,6 +179,7 @@ class VerificationController extends GetxController {
       PopScope(
         canPop: false,
         child: Dialog(
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.all(20.0),
@@ -192,27 +202,33 @@ class VerificationController extends GetxController {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-             const Icon(Icons.location_off_outlined, color: Color(0xFFA80808), size: 60),
+             Container(
+                width: 64,   // w-16
+                height: 64,  // h-16
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFE4E6), // bg-red-100
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: HeroIcon(
+                    HeroIcons.mapPin,
+                    style: HeroIconStyle.outline,
+                    size: 32, // h-8 w-8
+                    color: Color(0xFFA80808),
+                  ),
+                ),
+              ),
              const SizedBox(height: 10),
              const Text("Lokasi Tidak Valid", style: titleStyle),
              const SizedBox(height: 10),
-             const Text("Anda berada di luar jangkauan area presensi.", textAlign: TextAlign.center),
+             const Text("Posisi Anda tidak sesuai dengan ketentuan.", textAlign: TextAlign.center),
              const SizedBox(height: 15),
              Container(
                padding: const EdgeInsets.all(12),
                decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red[100]!)),
-               child: Column(
-                 children: [
-                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                     const Text("Jarak Anda"),
-                     Text("${resultData.value?['distance']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFA80808)))
-                   ]),
-                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                     const Text("Maksimal"),
-                     Text("${resultData.value?['allowed']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green))
-                   ]),
-                 ],
-               ),
+               child:Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text("Jarak tidak memasuki radius Pos", style: const TextStyle(color: Color(0xFFA80808)))
+                ]),
              ),
              const SizedBox(height: 20),
              Row(children: [
@@ -221,51 +237,79 @@ class VerificationController extends GetxController {
                    Get.back(); // Tutup dialog
                    _getCurrentLocation(); // Coba ambil lokasi ulang
                  }, 
-                 style: OutlinedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle)),
-                 child: const Text("Cek GPS Ulang", style: TextStyle(color: primaryBtnStyle)),
+                 style: OutlinedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6), ), ),
+                 child: const Text("Cek GPS", style: TextStyle(color: primaryBtnStyle)),
                )),
                const SizedBox(width: 10),
                Expanded(child: ElevatedButton(
-                 style: ElevatedButton.styleFrom(backgroundColor: primaryBtnStyle),
+                 style: ElevatedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle), backgroundColor: primaryBtnStyle, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6), ), ),
                  onPressed: () { Get.back(); },
-                 child: const Text("Tutup", style: TextStyle(color: Colors.white)),
+                 child: const Text("Kembali", style: TextStyle(color: Colors.white)),
                ))
              ])
           ],
         );
 
       case 'FACE_MISMATCH':
-        double similarity = double.tryParse((resultData.value?['similarity'] ?? "0").toString()) ?? 0;
-        similarity *= 100;
-        
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.face_retouching_off, color: Color(0xFFA80808), size: 60),
+            Container(
+              width: 64, // w-16
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFE4E6), // bg-red-100
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: HeroIcon(
+                  HeroIcons.exclamationTriangle, // icon segitiga
+                  style: HeroIconStyle.outline,
+                  size: 32, // h-8 w-8
+                  color: Color(0xFFA80808),
+                ),
+              ),
+            ),
             const SizedBox(height: 10),
             const Text("Wajah Tidak Dikenali", style: titleStyle),
             const SizedBox(height: 10),
-            Text("Sistem mendeteksi kemiripan wajah terlalu rendah (${similarity.toStringAsFixed(1)}%).", textAlign: TextAlign.center),
+            Text("Sistem gagal memverifikasi identitas.", textAlign: TextAlign.center),
             const SizedBox(height: 15),
             Container(
                padding: const EdgeInsets.all(12),
                decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red[100]!)),
-               child: const Text("Silakan periksa pencahayaan sekitar dan pastikan wajah Anda pas di dalam frame.", style: TextStyle(color: Color(0xFFA80808), fontSize: 13), textAlign: TextAlign.center),
-            ),
+               child:Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text("Verifikasi wajah gagal", style: const TextStyle(color: Color(0xFFA80808)))
+                ]),
+             ),
             const SizedBox(height: 20),
-             Row(children: [
-               Expanded(child: OutlinedButton(
-                 onPressed: () => Get.back(), // Tutup dialog, user bisa tekan tombol konfirmasi lagi
-                 style: OutlinedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle)),
-                 child: const Text("Coba Lagi", style: TextStyle(color: primaryBtnStyle)),
-               )),
-               const SizedBox(width: 10),
-               Expanded(child: ElevatedButton(
-                 style: ElevatedButton.styleFrom(backgroundColor: primaryBtnStyle),
-                 onPressed: () { Get.back(); handleCancel(); }, // Kembali ke kamera
-                 child: const Text("Foto Ulang", style: TextStyle(color: Colors.white)),
-               ))
-             ])
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                OutlinedButton(
+                  onPressed: () => Get.back(),
+                  style: OutlinedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12) ),
+                  child: const Text(
+                    "Coba Lagi",
+                    style: TextStyle(color: primaryBtnStyle),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle), backgroundColor: primaryBtnStyle, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12) ),
+                  onPressed: () {
+                    Get.back();
+                    handleCancel();
+                  },
+                  child: const Text(
+                    "Ambil Foto Ulang",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            )
           ],
         );
 
@@ -352,9 +396,7 @@ class VerificationController extends GetxController {
             width: double.infinity,
             height: 44,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBtnStyle,
-              ),
+              style: ElevatedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle), backgroundColor: primaryBtnStyle, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
               onPressed: () {
                 Get.close(2); // dialog + VerificationView
                 Get.offAllNamed('/');
@@ -370,30 +412,154 @@ class VerificationController extends GetxController {
 
 
       case 'NO_SCHEDULE':
-      case 'SHIFT_COMPLETED':
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+
+          // 🔶 Orange Circle Icon
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFFF3E0), // bg-orange-100
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: HeroIcon(
+                HeroIcons.clock,
+                style: HeroIconStyle.outline,
+                size: 32,
+                color: Color(0xFFD97706), // text-[#d97706]
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          const Text(
+            "Informasi Jadwal",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFD97706),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 🔶 Orange Info Box
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF7ED), // bg-orange-50
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFFEDD5)), // border-orange-100
+            ),
+            child: Text(
+              resultData.value?['message'] ?? "",
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFFD97706),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // 🔶 Full Width Button
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle), backgroundColor: primaryBtnStyle, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+              onPressed: () {
+                Get.back();
+                Get.offAllNamed('/');
+              },
+              child: const Text(
+                "Kembali ke Beranda",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+
       case 'SERVER_ERROR':
       default:
-        // Generic Error Template
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-             const Icon(Icons.error_outline, color: Color(0xFFA80808), size: 60),
-             const SizedBox(height: 10),
-             const Text("Gagal", style: titleStyle),
-             const SizedBox(height: 10),
-             Text(resultData.value?['message'] ?? "Terjadi kesalahan yang tidak diketahui.", textAlign: TextAlign.center),
-             const SizedBox(height: 20),
-             SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: primaryBtnStyle),
-                onPressed: () => Get.back(),
-                child: const Text("Tutup", style: TextStyle(color: Colors.white)),
+            Container(
+              width: 64, // w-16
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFFFE4E6), // bg-red-100
+                shape: BoxShape.circle,
               ),
+              child: const Center(
+                child: HeroIcon(
+                  HeroIcons.exclamationTriangle, // icon segitiga
+                  style: HeroIconStyle.outline,
+                  size: 32, // h-8 w-8
+                  color: Color(0xFFA80808),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text("Gagal", style: titleStyle),
+            const SizedBox(height: 10),
+            Text("Terjadi kesalahan saat memproses permintaan.", textAlign: TextAlign.center),
+            const SizedBox(height: 15),
+            Container(
+               padding: const EdgeInsets.all(12),
+               decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red[100]!)),
+               child:Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text("Terjadi kesalahan jaringan.", style: const TextStyle(color: Color(0xFFA80808)))
+                ]),
+             ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Get.back(),
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+                    child: const Text(
+                      "Tutup",
+                      style: TextStyle(color: primaryBtnStyle),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                Expanded(
+                  child : ElevatedButton(
+                    style: ElevatedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle),backgroundColor: primaryBtnStyle, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+                    onPressed: () {
+                      Get.back();
+                      confirmAttendance();
+                    },
+                    child: const Text(
+                      "Coba Lagi",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                )
+              ],
             )
-          ]
+          ],
         );
+  
     }
   }
 }

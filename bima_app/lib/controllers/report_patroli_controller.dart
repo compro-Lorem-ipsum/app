@@ -120,7 +120,7 @@ class ReportPatroliController extends GetxController {
     }
 
     if (latitude.value == 0 || longitude.value == 0) {
-      alertMessage.value = "Lokasi GPS belum terdeteksi.";
+      alertMessage.value = "Gagal mendapatkan lokasi GPS.";
       showModal();
       return;
     }
@@ -176,8 +176,9 @@ class ReportPatroliController extends GetxController {
         "lat": latitude.value,
         "lng": longitude.value,
         "status_lokasi": status.value,
-        "keterangan":
-            notes.value.isEmpty ? "Situasi aman terkendali." : notes.value,
+        "keterangan": notes.value.isEmpty 
+            ? "Situasi aman terkendali." 
+            : notes.value,
         "filenames": filenames,
       };
 
@@ -188,6 +189,10 @@ class ReportPatroliController extends GetxController {
       );
 
       resultData.value = reportRes.body;
+
+      print("STATUS CODE: ${reportRes.statusCode}");
+      print("BODY: ${reportRes.body}");
+
 
       showModal();
     } catch (e) {
@@ -203,9 +208,13 @@ class ReportPatroliController extends GetxController {
   void showModal() {
     Get.dialog(
       Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           child: buildModalContent(),
         ),
       ),
@@ -214,72 +223,177 @@ class ReportPatroliController extends GetxController {
   }
 
   Widget buildModalContent() {
-    final isLocationError =
-        resultData.value?['message']?.toLowerCase().contains("location") ??
-            false;
+    const primaryBlue = Color(0xFF122C93);
+    const orange = Color(0xFFF59E0B);
+    const orangeDark = Color(0xFFB45309);
+    const red = Color(0xFFA80808);
 
+    final isLocationError =
+      resultData.value?['message']?.contains("Location invalid") ?? false;
+    
+    final isScheduleError = 
+      resultData.value?['message']?.contains("Tidak ada jadwal untuk hari ini") ?? false;
+
+    if (isScheduleError) {
+      alertMessage.value = 'Tidak ada jadwal untuk hari ini';
+    }
+
+    // ================================
+    // 🔶 VALIDATION ERROR (ORANGE)
+    // ================================
     if (alertMessage.value.isNotEmpty) {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.warning, size: 60, color: Colors.orange),
-          const SizedBox(height: 12),
-          const Text("Gagal Memproses",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Text(alertMessage.value, textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          const Text(
+            "Gagal Memproses",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: orange,
+            ),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 20),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF122C93)),
-            onPressed: () { Get.back(); },
-            child: const Text("Tutup", style: TextStyle(color: Colors.white)),
-          )
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Color(0xFFFFEDD5)),
+            ),
+            child: Text(
+              alertMessage.value,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: orangeDark,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: orange,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              onPressed: () => Get.back(),
+              child: const Text(
+                "Tutup",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
         ],
       );
     }
 
+    // ================================
+    // 🔴 LOCATION ERROR (RED)
+    // ================================
     if (isLocationError) {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.location_off, size: 60, color: Colors.red),
-          const SizedBox(height: 12),
-          const Text("Lokasi Tidak Valid",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          Text("Jarak: ${resultData.value?['distance']}"),
-          Text("Maksimal: ${resultData.value?['allowed']}"),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF122C93)),
-            onPressed: () { Get.back(); },
-            child: const Text("Tutup", style: TextStyle(color: Colors.white)),
-          )
+          const Text(
+            "Lokasi Tidak Valid",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: red,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            "Posisi Anda terlalu jauh.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Color(0xFFFFF1F2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Color(0xFFFFE4E6)),
+            ),
+            child: Column(
+              children: [
+                Text("Jarak: ${resultData.value?['distance']}"),
+                Text("Maksimal: ${resultData.value?['allowed']}"),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryBlue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              onPressed: () => Get.back(),
+              child: const Text(
+                "Tutup",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
         ],
       );
     }
 
+    // ================================
+    // 🔵 SUCCESS
+    // ================================
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.check_circle, size: 60, color: Color(0xFF122C93)),
-        const SizedBox(height: 12),
-        const Text("Laporan Berhasil",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        const Text("Data patroli berhasil dikirim."),
-        const SizedBox(height: 20),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Color(0xFF122C93),
+        const Text(
+          "Laporan Berhasil",
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: primaryBlue,
           ),
-          onPressed: () {
-            Get.close(2); 
-            Get.offAllNamed('/');
-          },
-          child: const Text(
-            "Selesai",
-            style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          "Data patroli berhasil dikirim.",
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryBlue,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            onPressed: () {
+              Get.close(2);
+              Get.offAllNamed('/');
+            },
+            child: const Text(
+              "Selesai",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ),
       ],
