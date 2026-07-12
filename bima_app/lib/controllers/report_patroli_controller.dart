@@ -17,6 +17,11 @@ class ReportPatroliController extends GetxController {
   var status = ''.obs;
   var notes = ''.obs;
 
+  // Text controller for the "Keterangan" field so it can use the shared
+  // AppTextField widget. Purely presentational plumbing: it just mirrors
+  // its text into the existing `notes` Rx used by submitReport's payload.
+  final notesController = TextEditingController();
+
   var latitude = 0.0.obs;
   var longitude = 0.0.obs;
 
@@ -34,6 +39,15 @@ class ReportPatroliController extends GetxController {
     super.onInit();
     fetchSatpam();
     getGPS();
+    notesController.addListener(() {
+      notes.value = notesController.text;
+    });
+  }
+
+  @override
+  void onClose() {
+    notesController.dispose();
+    super.onClose();
   }
 
   // ===== GPS =====

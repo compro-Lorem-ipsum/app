@@ -3,6 +3,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/take_photo_patroli_controller.dart';
+import '../widgets/app_theme.dart';
+import '../widgets/primary_button.dart';
 
 class TakePhotoPatroliView extends StatelessWidget {
   const TakePhotoPatroliView({super.key});
@@ -11,10 +13,9 @@ class TakePhotoPatroliView extends StatelessWidget {
   Widget build(BuildContext context) {
     // Inject Controller
     final controller = Get.put(TakePhotoPatroliController());
-    const primaryColor = Color(0xFF122C93);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -22,23 +23,17 @@ class TakePhotoPatroliView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
               child: Column(
-                children: const [
+                children: [
                   Text(
                     "Pengambilan Gambar",
-                    style: TextStyle(
-                      fontSize: 20, 
-                      fontWeight: FontWeight.w600, 
-                      color: primaryColor
-                    ),
+                    textAlign: TextAlign.center,
+                    style: AppText.semiBold.copyWith(fontSize: 20, color: AppColors.primary),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
                     "Ambil Gambar Lokasi Patroli",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500, 
-                      color: primaryColor
-                    ),
+                    textAlign: TextAlign.center,
+                    style: AppText.regular.copyWith(fontSize: 14, color: AppColors.primary),
                   ),
                 ],
               ),
@@ -48,33 +43,35 @@ class TakePhotoPatroliView extends StatelessWidget {
             Expanded(
               child: Container(
                 width: double.infinity,
-                margin: const EdgeInsets.symmetric(horizontal: 20), 
+                margin: const EdgeInsets.symmetric(horizontal: 20),
                 decoration: BoxDecoration(
                   color: Colors.black,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: primaryColor, width: 2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.cardBorder),
                 ),
-                clipBehavior: Clip.hardEdge, 
+                clipBehavior: Clip.hardEdge,
                 child: Obx(() {
                   if (!controller.isCameraInitialized.value) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    );
                   }
 
                   return Stack(
                     alignment: Alignment.center,
-                    fit: StackFit.expand, 
+                    fit: StackFit.expand,
                     children: [
                       if (controller.photoTaken.value)
                         // Tampilan Hasil Foto
                         Image.file(
-                          File(controller.photoPath.value), 
+                          File(controller.photoPath.value),
                           fit: BoxFit.cover,
                           cacheWidth: 600,
                         )
                       else
                         // Tampilan Kamera Live
                         FittedBox(
-                          fit: BoxFit.cover, 
+                          fit: BoxFit.cover,
                           child: SizedBox(
                             width: controller.cameraController!.value.previewSize!.height,
                             height: controller.cameraController!.value.previewSize!.width,
@@ -89,57 +86,41 @@ class TakePhotoPatroliView extends StatelessWidget {
 
             // ================= 3. TOMBOL AKSI =================
             Padding(
-              padding: const EdgeInsets.all(20.0), 
+              padding: const EdgeInsets.all(20.0),
               child: Obx(() => SizedBox(
-                width: double.infinity,
-                child: !controller.photoTaken.value
-                  ? SizedBox(
-                      height: 50,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)
+                    width: double.infinity,
+                    child: !controller.photoTaken.value
+                        ? PrimaryButton(
+                            label: "Ambil Foto",
+                            onPressed: controller.takePhoto,
                           )
-                        ),
-                        onPressed: controller.takePhoto,
-                        child: const Text("Ambil Foto", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                    )
-                  : Column(
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)
-                              )
-                            ),
-                            onPressed: controller.usePhoto,
-                            child: const Text("Gunakan Foto", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        : Column(
+                            children: [
+                              PrimaryButton(
+                                label: "Gunakan Foto",
+                                onPressed: controller.usePhoto,
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 50,
+                                child: TextButton(
+                                  style: TextButton.styleFrom(
+                                    backgroundColor: const Color(0xFFFFDDE9),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                  ),
+                                  onPressed: controller.retakePhoto,
+                                  child: Text(
+                                    "Foto Ulang",
+                                    style: AppText.semiBold.copyWith(color: const Color(0xFFF31260), fontSize: 16),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: TextButton(
-                            style: TextButton.styleFrom(
-                              backgroundColor: Colors.red.withOpacity(0.1),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)
-                              )
-                            ),
-                            onPressed: controller.retakePhoto,
-                            child: const Text("Foto Ulang", style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ],
-                    ),
-              )),
+                  )),
             ),
           ],
         ),
