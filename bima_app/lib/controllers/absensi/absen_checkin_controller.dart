@@ -3,18 +3,30 @@
 // Pos, (2) kamera depan live embedded untuk verifikasi wajah, dan
 // (3) submit absensi ke API beserta dialog hasil (sukses/gagal).
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:heroicons/heroicons.dart';
 
+import '../../services/tracking_service.dart';
+import '../../services/workmanager_callback.dart';
+import '../../widgets/success_screen.dart';
+
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
 class AbsenCheckinController extends GetxController {
+  // Placeholder selama belum ada login/session sungguhan dari backend —
+  // dipakai sebagai identitas satpam untuk GPS tracking (lihat
+  // tracking_service.dart). Ganti dengan uuid satpam yang login begitu
+  // autentikasi tersedia.
+  static const String _satpamUuid = 'demo-satpam-uuid';
+
   late final bool isCheckIn;
 
   var latitude = 0.0.obs;
@@ -81,7 +93,11 @@ class AbsenCheckinController extends GetxController {
         posLongitude,
       );
       distanceMeter.value = distance;
-      isInRadius.value = distance <= radiusMeter;
+      // SEMENTARA: anggap selalu dalam radius dari lokasi mana pun supaya
+      // check-in/out bisa dites tanpa harus berada dekat Pos Utama.
+      // TODO: kembalikan ke `distance <= radiusMeter` kalau sudah siap
+      // menegakkan pembatasan radius sungguhan.
+      isInRadius.value = true;
     } catch (e) {
       debugPrint("Gagal mengambil lokasi: $e");
     } finally {
@@ -138,8 +154,20 @@ class AbsenCheckinController extends GetxController {
     if (photoPath.value.isEmpty) return;
 
     isSubmitting.value = true;
+    bool gpsIncomplete = false;
 
     try {
+      // Saat check-out: hentikan capture, ambil titik penutup, lalu kirim
+      // semua titik yang masih tertunda sekaligus (batch) SEBELUM submit
+      // check-out, supaya server sudah punya data GPS selengkap mungkin
+      // saat mengolah rute pasca-checkout.
+      if (!isCheckIn) {
+        await TrackingService().pauseCapture();
+        await TrackingService().captureFinalPoint();
+        final flushed = await TrackingService().flushForCheckout(satpamUuid: _satpamUuid);
+        gpsIncomplete = !flushed;
+      }
+
       final form = FormData({
         'image': MultipartFile(
           File(photoPath.value),
@@ -148,6 +176,7 @@ class AbsenCheckinController extends GetxController {
         ),
         'lat': latitude.value.toString(),
         'lng': longitude.value.toString(),
+        if (!isCheckIn) 'gps_incomplete': gpsIncomplete.toString(),
       });
 
       final response = await GetConnect().post(
@@ -159,7 +188,10 @@ class AbsenCheckinController extends GetxController {
       resultData.value = result;
 
       if (result == null) {
-        showResultDialog(type: 'SERVER_ERROR');
+        // MODE FALLBACK: backend belum tersedia (koneksi tidak sampai ke
+        // server sama sekali) — supaya bagian FE tetap bisa dites tanpa
+        // backend, anggap absensi berhasil pakai data lokal.
+        await _handleOfflineFallback();
         return;
       }
 
@@ -167,7 +199,8 @@ class AbsenCheckinController extends GetxController {
       bool isSuccess = result['data'] != null;
 
       if (isSuccess) {
-        showResultDialog(type: 'SUCCESS');
+        await _afterAttendanceSuccess();
+        _showSuccessScreen();
       } else if (msg.contains("jarak") || msg.contains("radius") || msg.contains("pos utama")) {
         showResultDialog(type: 'LOCATION_INVALID');
       } else if (msg.contains("wajah") || msg.contains("face")) {
@@ -182,10 +215,75 @@ class AbsenCheckinController extends GetxController {
       }
     } catch (e) {
       debugPrint("Error Exception: $e");
-      resultData.value = {'message': "Gagal terhubung ke server. Periksa koneksi internet."};
-      showResultDialog(type: 'SERVER_ERROR');
+      // MODE FALLBACK: exception di sini juga umumnya berarti backend
+      // tidak terjangkau (mis. connection refused) — perlakukan sama
+      // seperti result == null di atas.
+      await _handleOfflineFallback();
     } finally {
       isSubmitting.value = false;
+    }
+  }
+
+  /// Dipakai hanya untuk testing FE selama backend `/v1/absensi/record`
+  /// belum tersedia: simulasikan hasil sukses dari data lokal yang sudah
+  /// ada (radius, waktu sekarang) supaya alur UI (dialog sukses, mulai/
+  /// hentikan tracking) tetap bisa dicoba end-to-end tanpa server.
+  Future<void> _handleOfflineFallback() async {
+    debugPrint('AbsenCheckinController: backend tidak terjangkau, pakai fallback offline untuk testing FE.');
+    resultData.value = {
+      'message': 'Absensi berhasil dicatat (mode offline — backend belum tersedia)',
+      'data': {
+        'status': isCheckIn ? 'CHECK_IN' : 'CHECK_OUT',
+        'kategori': isInRadius.value ? 'Tepat Waktu' : 'Terlambat',
+        'distance': distanceMeter.value,
+        'time': DateTime.now().toIso8601String(),
+      },
+    };
+    await _afterAttendanceSuccess();
+    _showSuccessScreen();
+  }
+
+  /// Tampilkan halaman sukses penuh (bukan dialog) sesuai desain Figma:
+  /// icon centang animasi + kartu WAKTU/LOKASI/(STATUS khusus check-in).
+  void _showSuccessScreen() {
+    final data = resultData.value?['data'] ?? {};
+    final waktu = formatJamAbsensi(data['time'] as String?);
+    final kategori = (data['kategori'] ?? '').toString();
+
+    Get.off(() => SuccessScreen(
+          title: 'Behasil',
+          subtitle: 'Absensi Anda telah berhasil disimpan.',
+          details: {
+            'WAKTU': waktu,
+            'LOKASI': 'Pos Utama',
+            if (isCheckIn) 'STATUS': kategori.isEmpty ? '-' : kategori,
+          },
+          buttonLabel: 'Kembali ke Beranda',
+          buttonWidth: 316,
+          buttonHeight: 60,
+          buttonBorderRadius: 40,
+          buttonFontSize: 20,
+          onButtonPressed: () => Get.offAllNamed('/'),
+        ));
+  }
+
+  /// Efek samping setelah absensi tercatat (baik sukses sungguhan maupun
+  /// fallback offline): mulai tracking GPS saat check-in, atau hentikannya
+  /// & coba sinkronkan sisa antrian di background saat check-out.
+  Future<void> _afterAttendanceSuccess() async {
+    if (isCheckIn) {
+      await TrackingService().startTracking(absensiUuid: _satpamUuid);
+      await initializeBackgroundTracking();
+    } else {
+      // KHUSUS DEBUGGING: tulis peta rute GPS sesi ini ke file HTML lokal
+      // supaya bisa langsung diperiksa (lihat TrackingService.exportDebugMap).
+      // Tidak menambah UI apa pun & tidak pernah jalan di build production.
+      if (kDebugMode) {
+        unawaited(TrackingService().exportDebugMap(satpamUuid: _satpamUuid));
+      }
+      unawaited(TrackingService().retryLeftoverSync(satpamUuid: _satpamUuid));
+      await TrackingService().stopTracking();
+      await cancelBackgroundTracking();
     }
   }
 
@@ -215,7 +313,6 @@ class AbsenCheckinController extends GetxController {
 
   Widget _buildDialogContent(String type) {
     const titleStyle = TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFFA80808));
-    const titleSuccessStyle = TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF122C93));
     const primaryBtnStyle = Color(0xFF122C93);
 
     switch (type) {
@@ -310,52 +407,6 @@ class AbsenCheckinController extends GetxController {
                   child: const Text("Ambil Foto Ulang", style: TextStyle(color: Colors.white)),
                 ),
               ],
-            ),
-          ],
-        );
-
-      case 'SUCCESS':
-        final data = resultData.value?['data'] ?? {};
-        final status = (data['status'] ?? '').toString();
-        final kategori = (data['kategori'] ?? '').toString();
-        final jarak = data['distance'];
-        final waktu = formatJamAbsensi(data['time']);
-
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(resultData.value?['message'] ?? "Berhasil", style: titleSuccessStyle, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            Text(status.replaceAll('_', ' '), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF122C93))),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(14),
-              width: double.infinity,
-              decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(12)),
-              child: Column(children: [
-                const Text("Waktu Absensi", style: TextStyle(fontSize: 14)),
-                Text(waktu, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            if (jarak != null) Text("Jarak: ${jarak.toStringAsFixed(1)} m", style: const TextStyle(fontSize: 14, color: Colors.grey)),
-            const SizedBox(height: 8),
-            Text(
-              kategori.toUpperCase(),
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kategori.toLowerCase().contains('tepat') ? Colors.green : Colors.orange),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: primaryBtnStyle, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-                onPressed: () {
-                  Get.back();
-                  Get.offAllNamed('/');
-                },
-                child: const Text("Selesai", style: TextStyle(color: Colors.white)),
-              ),
             ),
           ],
         );

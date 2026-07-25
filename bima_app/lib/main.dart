@@ -35,6 +35,7 @@ import 'views/dokumen/unggah_berkas_view.dart';
 import 'views/panic/lokasi_panic_view.dart';
 
 // Import controller
+import 'controllers/beranda/landing_controller.dart';
 import 'controllers/auth/login_controller.dart';
 import 'controllers/auth/lupa_password_controller.dart';
 import 'controllers/patroli/report_patroli_controller.dart';
@@ -93,6 +94,9 @@ class MyApp extends StatelessWidget {
         GetPage(
           name: '/',
           page: () => const LandingView(),
+          binding: BindingsBuilder(() {
+            Get.lazyPut(() => LandingController());
+          }),
           transition: Transition.fadeIn,
           transitionDuration: const Duration(milliseconds: 220),
         ),

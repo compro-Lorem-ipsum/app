@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
+import '../../controllers/beranda/landing_controller.dart';
 import '../../widgets/app_theme.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../widgets/card_container.dart';
@@ -19,8 +20,13 @@ class LandingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = Get.find<LandingController>();
     final features = [
-      _Feature('Absensi', 'assets/icons/absensi.svg', () => Get.toNamed('/absen-checkin', arguments: {'isCheckIn': true})),
+      _Feature(
+        'Absensi',
+        'assets/icons/absensi.svg',
+        () => Get.toNamed('/absen-checkin', arguments: {'isCheckIn': !controller.isOnDuty.value}),
+      ),
       _Feature('Patroli', 'assets/icons/patroli.svg', () => Get.toNamed('/report-patroli')),
       _Feature('Laporan Kejadian', 'assets/icons/laporan_kejadian.svg', () => Get.toNamed('/lapor-kejadian')),
       _Feature('Pengajuan', 'assets/icons/pengajuan.svg', () => Get.toNamed('/pengajuan')),
@@ -51,7 +57,7 @@ class LandingView extends StatelessWidget {
                     const SizedBox(height: 12),
                     _buildFeatureGrid(features),
                     const SizedBox(height: 24),
-                    _buildStatusHariIniCard(),
+                    _buildStatusHariIniCard(controller),
                     const SizedBox(height: 24),
                     SectionHeader(title: 'Pesan', onSeeAll: () => Get.toNamed('/pesan')),
                     const SizedBox(height: 12),
@@ -231,7 +237,7 @@ class LandingView extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusHariIniCard() {
+  Widget _buildStatusHariIniCard(LandingController controller) {
     return CardContainer(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,11 +256,11 @@ class LandingView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          PrimaryButton(
-            label: 'Check - in',
-            height: 45,
-            onPressed: () => Get.toNamed('/absen-checkin', arguments: {'isCheckIn': true}),
-          ),
+          Obx(() => PrimaryButton(
+                label: controller.isOnDuty.value ? 'Check - out' : 'Check - in',
+                height: 45,
+                onPressed: () => Get.toNamed('/absen-checkin', arguments: {'isCheckIn': !controller.isOnDuty.value}),
+              )),
         ],
       ),
     );
