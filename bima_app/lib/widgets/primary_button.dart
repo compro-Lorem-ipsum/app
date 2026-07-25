@@ -1,3 +1,6 @@
+// Tombol utama bergaya seragam (warna, radius, ukuran font bisa
+// dikustomisasi) dipakai di hampir semua halaman sebagai tombol aksi.
+
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 
@@ -7,6 +10,7 @@ class PrimaryButton extends StatelessWidget {
   final double height;
   final Color? color;
   final double borderRadius;
+  final double fontSize;
 
   const PrimaryButton({
     super.key,
@@ -15,6 +19,7 @@ class PrimaryButton extends StatelessWidget {
     this.height = 50,
     this.color,
     this.borderRadius = 10,
+    this.fontSize = 16,
   });
 
   @override
@@ -30,7 +35,7 @@ class PrimaryButton extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(borderRadius)),
         ),
         onPressed: onPressed,
-        child: Text(label, style: AppText.bold.copyWith(fontSize: 16)),
+        child: Text(label, style: AppText.bold.copyWith(fontSize: fontSize)),
       ),
     );
   }

@@ -1,3 +1,6 @@
+// Kumpulan konstanta desain bersama: warna (AppColors) dan gaya teks
+// (AppText) berbasis font Poppins, dipakai di hampir semua halaman.
+
 import 'package:flutter/material.dart';
 
 class AppColors {

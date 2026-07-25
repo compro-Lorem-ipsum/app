@@ -1,3 +1,6 @@
+// Varian layar sukses bergaya 'bubble/gelembung', dipakai misalnya
+// setelah reset password berhasil.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'app_theme.dart';

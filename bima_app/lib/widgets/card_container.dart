@@ -1,3 +1,6 @@
+// Kartu (Container) bergaya seragam — putih, sudut membulat, border
+// tipis — dipakai sebagai bungkus konten di banyak halaman.
+
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 

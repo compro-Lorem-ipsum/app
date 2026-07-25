@@ -1,3 +1,6 @@
+// Widget judul seksi dengan tombol 'Lihat Semua' di kanan, dipakai di
+// Beranda untuk seksi Pesan & Pengumuman.
+
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 

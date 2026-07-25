@@ -1,3 +1,7 @@
+// Text field bergaya seragam (label + input) dipakai di seluruh form
+// aplikasi; mendukung obscureText & suffixIcon untuk kasus seperti
+// toggle show/hide password.
+
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 

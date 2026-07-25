@@ -1,3 +1,6 @@
+// Header bersama untuk alur wizard (mis. pendaftaran akun): tombol
+// back/close, indikator langkah (step), dan label langkah saat ini.
+
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 

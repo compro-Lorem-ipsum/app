@@ -1,58 +1,61 @@
+// Entry point aplikasi. Mendaftarkan seluruh routing (GetPage) dan
+// binding controller-nya lewat GetMaterialApp, dikelompokkan per modul
+// fitur (auth, beranda, absensi, patroli, panic, dst) yang strukturnya
+// mengikuti folder lib/controllers dan lib/views.
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Import views
-import 'views/login_view.dart';
-import 'views/lupa_password_part1_view.dart';
-import 'views/lupa_password_part2_view.dart';
-import 'views/landing_view.dart';
-import 'views/take_photo_view.dart';
-import 'views/verification_view.dart';
-import 'views/report_patroli_view.dart';
-import 'views/take_photo_patroli_view.dart';
-import 'views/register_kontak_jabatan_view.dart';
-import 'views/register_akun_part1_view.dart';
-import 'views/register_akun_upload_foto_view.dart';
-import 'views/register_akun_part4_view.dart';
-import 'views/register_akun_part5_view.dart';
-import 'views/panic_alert_view.dart';
-import 'views/absen_checkin_view.dart';
-import 'views/absen_berhasil_view.dart';
-import 'views/lapor_kejadian_view.dart';
-import 'views/pengajuan_view.dart';
-import 'views/buat_pengajuan_view.dart';
-import 'views/pengumuman_view.dart';
-import 'views/pesan_view.dart';
-import 'views/rep_doks_view.dart';
-import 'views/rekan_kerja_view.dart';
-import 'views/aktifitas_saya_view.dart';
-import 'views/profile_saya_view.dart';
-import 'views/unggah_berkas_view.dart';
-import 'views/lokasi_panic_view.dart';
+import 'views/auth/login_view.dart';
+import 'views/auth/lupa_password_part1_view.dart';
+import 'views/auth/lupa_password_part2_view.dart';
+import 'views/beranda/landing_view.dart';
+import 'views/patroli/report_patroli_view.dart';
+import 'views/patroli/take_photo_patroli_view.dart';
+import 'views/auth/register_kontak_jabatan_view.dart';
+import 'views/auth/register_akun_part1_view.dart';
+import 'views/auth/register_akun_upload_foto_view.dart';
+import 'views/auth/register_akun_part4_view.dart';
+import 'views/auth/register_akun_part5_view.dart';
+import 'views/panic/panic_alert_view.dart';
+import 'views/absensi/absen_checkin_view.dart';
+import 'views/absensi/absen_berhasil_view.dart';
+import 'views/lapor_kejadian/lapor_kejadian_view.dart';
+import 'views/pengajuan/pengajuan_view.dart';
+import 'views/pengajuan/buat_pengajuan_view.dart';
+import 'views/pengumuman/pengumuman_view.dart';
+import 'views/pesan/pesan_view.dart';
+import 'views/dokumen/rep_doks_view.dart';
+import 'views/rekan_kerja/rekan_kerja_view.dart';
+import 'views/aktifitas/aktifitas_saya_view.dart';
+import 'views/profile/profile_saya_view.dart';
+import 'views/dokumen/unggah_berkas_view.dart';
+import 'views/panic/lokasi_panic_view.dart';
 
 // Import controller
-import 'controllers/login_controller.dart';
-import 'controllers/lupa_password_controller.dart';
-import 'controllers/report_patroli_controller.dart';
-import 'controllers/register_kontak_jabatan_controller.dart';
-import 'controllers/register_akun_part1_controller.dart';
-import 'controllers/register_akun_upload_foto_controller.dart';
-import 'controllers/register_akun_part4_controller.dart';
-import 'controllers/register_akun_part5_controller.dart';
-import 'controllers/panic_alert_controller.dart';
-import 'controllers/absen_checkin_controller.dart';
-import 'controllers/absen_berhasil_controller.dart';
-import 'controllers/lapor_kejadian_controller.dart';
-import 'controllers/pengajuan_controller.dart';
-import 'controllers/pengumuman_controller.dart';
-import 'controllers/pesan_controller.dart';
-import 'controllers/rep_doks_controller.dart';
-import 'controllers/rekan_kerja_controller.dart';
-import 'controllers/aktifitas_saya_controller.dart';
-import 'controllers/profile_saya_controller.dart';
-import 'controllers/unggah_berkas_controller.dart';
-import 'controllers/lokasi_panic_controller.dart';
+import 'controllers/auth/login_controller.dart';
+import 'controllers/auth/lupa_password_controller.dart';
+import 'controllers/patroli/report_patroli_controller.dart';
+import 'controllers/auth/register_kontak_jabatan_controller.dart';
+import 'controllers/auth/register_akun_part1_controller.dart';
+import 'controllers/auth/register_akun_upload_foto_controller.dart';
+import 'controllers/auth/register_akun_part4_controller.dart';
+import 'controllers/auth/register_akun_part5_controller.dart';
+import 'controllers/panic/panic_alert_controller.dart';
+import 'controllers/absensi/absen_checkin_controller.dart';
+import 'controllers/absensi/absen_berhasil_controller.dart';
+import 'controllers/lapor_kejadian/lapor_kejadian_controller.dart';
+import 'controllers/pengajuan/pengajuan_controller.dart';
+import 'controllers/pengumuman/pengumuman_controller.dart';
+import 'controllers/pesan/pesan_controller.dart';
+import 'controllers/dokumen/rep_doks_controller.dart';
+import 'controllers/rekan_kerja/rekan_kerja_controller.dart';
+import 'controllers/aktifitas/aktifitas_saya_controller.dart';
+import 'controllers/profile/profile_saya_controller.dart';
+import 'controllers/dokumen/unggah_berkas_controller.dart';
+import 'controllers/panic/lokasi_panic_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,10 +90,12 @@ class MyApp extends StatelessWidget {
         ),
         GetPage(name: '/lupa-password-part2', page: () => const LupaPasswordPart2View()),
 
-        GetPage(name: '/', page: () => const LandingView()),
-        GetPage(name: '/take-photo', page: () => const TakePhotoView()),
-        GetPage(name: '/verification', page: () => const VerificationView()),
-
+        GetPage(
+          name: '/',
+          page: () => const LandingView(),
+          transition: Transition.fadeIn,
+          transitionDuration: const Duration(milliseconds: 220),
+        ),
         GetPage(
           name: '/report-patroli',
           page: () => const ReportPatroliView(),
@@ -197,6 +202,8 @@ class MyApp extends StatelessWidget {
           binding: BindingsBuilder(() {
             Get.lazyPut(() => PesanController());
           }),
+          transition: Transition.fadeIn,
+          transitionDuration: const Duration(milliseconds: 220),
         ),
 
         GetPage(
@@ -221,6 +228,8 @@ class MyApp extends StatelessWidget {
           binding: BindingsBuilder(() {
             Get.lazyPut(() => AktifitasSayaController());
           }),
+          transition: Transition.fadeIn,
+          transitionDuration: const Duration(milliseconds: 220),
         ),
 
         GetPage(
@@ -229,6 +238,8 @@ class MyApp extends StatelessWidget {
           binding: BindingsBuilder(() {
             Get.lazyPut(() => ProfileSayaController());
           }),
+          transition: Transition.fadeIn,
+          transitionDuration: const Duration(milliseconds: 220),
         ),
 
         GetPage(

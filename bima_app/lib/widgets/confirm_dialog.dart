@@ -1,3 +1,6 @@
+// Dialog konfirmasi bersama dengan countdown detik sebelum tombol
+// konfirmasi bisa ditekan, dipakai antara lain oleh Panic Alert.
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';

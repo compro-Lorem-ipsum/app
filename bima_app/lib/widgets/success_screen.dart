@@ -1,4 +1,9 @@
+// Layar sukses generik (icon centang animasi + judul + tombol aksi)
+// dipakai bersama oleh beberapa alur seperti Unggah Berkas dan
+// Pengajuan. Konten utamanya selalu center vertikal di atas tombol.
+
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'app_theme.dart';
 import 'card_container.dart';
 import 'primary_button.dart';
@@ -9,6 +14,10 @@ class SuccessScreen extends StatelessWidget {
   final Map<String, String>? details;
   final String buttonLabel;
   final VoidCallback onButtonPressed;
+  final double? buttonWidth;
+  final double buttonHeight;
+  final double buttonBorderRadius;
+  final double buttonFontSize;
 
   const SuccessScreen({
     super.key,
@@ -17,6 +26,10 @@ class SuccessScreen extends StatelessWidget {
     this.details,
     this.buttonLabel = 'Kembali ke Beranda',
     required this.onButtonPressed,
+    this.buttonWidth,
+    this.buttonHeight = 50,
+    this.buttonBorderRadius = 10,
+    this.buttonFontSize = 16,
   });
 
   Widget _buildIconAndTitle() {
@@ -32,7 +45,9 @@ class SuccessScreen extends StatelessWidget {
               width: 64,
               height: 64,
               decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
-              child: const Icon(Icons.check, color: Colors.white, size: 32),
+              child: Center(
+                child: SvgPicture.asset('assets/icons/check_bold.svg', width: 36, height: 36),
+              ),
             ),
           ),
         ),
@@ -48,8 +63,6 @@ class SuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasExtraContent = subtitle != null || details != null;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -57,32 +70,49 @@ class SuccessScreen extends StatelessWidget {
           padding: const EdgeInsets.all(25),
           child: Column(
             children: [
-              if (hasExtraContent) ...[
-                const SizedBox(height: 60),
-                _buildIconAndTitle(),
-              ] else
-                Expanded(child: Center(child: _buildIconAndTitle())),
-              if (details != null) ...[
-                const SizedBox(height: 24),
-                CardContainer(
-                  child: Column(
-                    children: details!.entries
-                        .map((e) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(e.key, style: AppText.regular.copyWith(fontSize: 12, color: AppColors.disabled)),
-                                  Text(e.value, style: AppText.semiBold.copyWith(fontSize: 13, color: Colors.black)),
-                                ],
-                              ),
-                            ))
-                        .toList(),
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildIconAndTitle(),
+                        if (details != null) ...[
+                          const SizedBox(height: 24),
+                          CardContainer(
+                            child: Column(
+                              children: details!.entries
+                                  .map((e) => Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 6),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(e.key, style: AppText.regular.copyWith(fontSize: 12, color: AppColors.disabled)),
+                                            Text(e.value, style: AppText.semiBold.copyWith(fontSize: 13, color: Colors.black)),
+                                          ],
+                                        ),
+                                      ))
+                                  .toList(),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ],
-              if (hasExtraContent) const Spacer(),
-              PrimaryButton(label: buttonLabel, onPressed: onButtonPressed),
+              ),
+              Center(
+                child: SizedBox(
+                  width: buttonWidth,
+                  child: PrimaryButton(
+                    label: buttonLabel,
+                    onPressed: onButtonPressed,
+                    height: buttonHeight,
+                    borderRadius: buttonBorderRadius,
+                    fontSize: buttonFontSize,
+                  ),
+                ),
+              ),
             ],
           ),
         ),

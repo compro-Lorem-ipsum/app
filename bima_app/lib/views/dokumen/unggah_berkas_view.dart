@@ -1,0 +1,175 @@
+// Tampilan halaman Unggah Berkas (KTP/BPJS/NPWP): kartu progres,
+// baris per dokumen dengan icon sesuai tipe file (JPG/PDF), dan tombol
+// unggah dari file (bukan kamera).
+
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:get/get.dart';
+import '../../controllers/dokumen/unggah_berkas_controller.dart';
+import '../../widgets/app_theme.dart';
+import '../../widgets/card_container.dart';
+import '../../widgets/primary_button.dart';
+
+class UnggahBerkasView extends StatelessWidget {
+  const UnggahBerkasView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = Get.find<UnggahBerkasController>();
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(25, 16, 25, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 12),
+                    Text(
+                      'KTP, BPJS, dan NPWP · JPG atau PDF',
+                      style: AppText.regular.copyWith(fontSize: 14, color: AppColors.disabled),
+                    ),
+                    const SizedBox(height: 20),
+                    Obx(() => _buildProgressCard(controller)),
+                    const SizedBox(height: 16),
+                    Obx(() => Column(
+                          children: controller.slots
+                              .map((slot) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _buildDocumentRow(controller, slot),
+                                  ))
+                              .toList(),
+                        )),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
+              child: Obx(() => PrimaryButton(
+                    label: controller.isComplete ? 'Simpan Berkas' : 'Unggah Berkas',
+                    onPressed: controller.isComplete ? controller.submit : null,
+                  )),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => Get.back(),
+          child: SvgPicture.asset('assets/icons/arrow_left.svg', width: 28, height: 28),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            'Unggah Berkas',
+            style: AppText.semiBold.copyWith(fontSize: 25, color: AppColors.primary),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProgressCard(UnggahBerkasController controller) {
+    final progress = controller.uploadedCount / controller.slots.length;
+    return CardContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Kelengkapan Berkas', style: AppText.semiBold.copyWith(fontSize: 12, color: Colors.black)),
+              Text(
+                '${controller.uploadedCount} / ${controller.slots.length} Terunggah',
+                style: AppText.bold.copyWith(fontSize: 12, color: AppColors.primary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 5,
+              backgroundColor: AppColors.progressTrack,
+              valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentRow(UnggahBerkasController controller, DocumentSlot slot) {
+    return CardContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(slot.title, style: AppText.semiBold.copyWith(fontSize: 14, color: Colors.black)),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(color: const Color(0xFFD9D9D9), borderRadius: BorderRadius.circular(10)),
+                child: Center(
+                  child: SvgPicture.asset(
+                    slot.isPdf ? 'assets/icons/pdf_outline.svg' : 'assets/icons/id_card.svg',
+                    width: 30,
+                    height: 30,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: slot.uploaded
+                      ? [
+                          Text(slot.fileName ?? '', style: AppText.semiBold.copyWith(fontSize: 12, color: Colors.black)),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Text('${slot.fileSize} · ', style: AppText.regular.copyWith(fontSize: 10, color: AppColors.disabled)),
+                              SvgPicture.asset('assets/icons/check_one.svg', width: 12, height: 12),
+                              const SizedBox(width: 4),
+                              Text('Berhasil diunggah', style: AppText.medium.copyWith(fontSize: 10, color: const Color(0xFF008236))),
+                            ],
+                          ),
+                        ]
+                      : [
+                          Text(slot.subtitle, style: AppText.regular.copyWith(fontSize: 12, color: AppColors.disabled)),
+                        ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (!slot.uploaded)
+                GestureDetector(
+                  onTap: () => controller.upload(slot),
+                  child: const Icon(Icons.cloud_upload_outlined, color: AppColors.primary, size: 30),
+                )
+              else
+                GestureDetector(
+                  onTap: () => controller.remove(slot),
+                  child: SvgPicture.asset('assets/icons/delete_circle.svg', width: 30, height: 30),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -1,3 +1,6 @@
+// Widget peta kecil (preview lokasi) berbasis flutter_map, dipakai di
+// halaman-halaman yang menampilkan koordinat GPS.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';

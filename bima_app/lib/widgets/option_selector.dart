@@ -1,3 +1,6 @@
+// Widget pilihan opsi berbentuk chip/tombol (mis. pilih jenis kelamin)
+// yang dipakai di form pendaftaran.
+
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 

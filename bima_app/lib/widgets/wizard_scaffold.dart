@@ -1,3 +1,6 @@
+// Scaffold bersama untuk halaman-halaman wizard: menggabungkan
+// WizardHeader, area konten, dan tombol aksi di bawah.
+
 import 'package:flutter/material.dart';
 import 'primary_button.dart';
 
