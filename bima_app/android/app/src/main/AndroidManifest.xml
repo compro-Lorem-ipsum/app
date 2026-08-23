@@ -6,7 +6,14 @@
 
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- Wajib sejak Android 14 (targetSdk 34) untuk menjalankan foreground
+         service bertipe "location" (lihat tracking_service.dart) — tanpa ini
+         startForegroundService akan melempar MissingForegroundServiceTypeException. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:label="BIMA Absensi Patroli"
         android:name="${applicationName}"
@@ -38,6 +45,15 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Foreground service milik flutter_foreground_task (lihat
+             tracking_service.dart + gps_task_handler.dart). Nama service
+             tidak boleh diubah — sudah ditentukan oleh plugin. Tipe "location"
+             wajib dideklarasikan di sini untuk targetSdk 34 (Android 14+). -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

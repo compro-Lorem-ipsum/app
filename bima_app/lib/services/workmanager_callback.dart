@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'queue_service.dart';
+import 'tracking_prefs_keys.dart';
 
 const String kGpsHeartbeatTask = 'gps_heartbeat_task';
 
@@ -26,10 +27,10 @@ void callbackDispatcher() {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final onDuty = prefs.getBool('tracking_on_duty') ?? false;
+      final onDuty = prefs.getBool(TrackingPrefKeys.onDuty) ?? false;
       if (!onDuty) return true;
 
-      final absensiUuid = prefs.getString('tracking_absensi_uuid');
+      final absensiUuid = prefs.getString(TrackingPrefKeys.absensiUuid);
 
       final position = await Geolocator.getLastKnownPosition();
       if (position == null) return true;

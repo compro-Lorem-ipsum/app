@@ -116,9 +116,14 @@ class QueueService {
     );
   }
 
-  /// Bersihkan titik-titik yang sudah synced supaya tabel tidak terus membesar.
-  Future<void> clearSynced() async {
+  /// Kosongkan seluruh antrian lokal, synced maupun belum. Dipanggil setelah
+  /// check-out (lihat TrackingService.stopTracking) — MODE FALLBACK: karena
+  /// endpoint batch belum tersedia di backend, titik yang gagal terkirim
+  /// tidak ada gunanya dipertahankan sampai sesi berikutnya (malah bikin
+  /// rute sesi lama ikut kebawa ke sesi baru, karena keduanya masih memakai
+  /// `absensi_uuid` placeholder yang sama).
+  Future<void> clearAll() async {
     final db = await _database;
-    await db.delete('gps_queue', where: 'synced = 1');
+    await db.delete('gps_queue');
   }
 }

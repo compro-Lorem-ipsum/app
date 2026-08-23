@@ -269,7 +269,7 @@ class AbsenCheckinController extends GetxController {
 
   /// Efek samping setelah absensi tercatat (baik sukses sungguhan maupun
   /// fallback offline): mulai tracking GPS saat check-in, atau hentikannya
-  /// & coba sinkronkan sisa antrian di background saat check-out.
+  /// & bersihkan cache lokal saat check-out.
   Future<void> _afterAttendanceSuccess() async {
     if (isCheckIn) {
       await TrackingService().startTracking(absensiUuid: _satpamUuid);
@@ -277,11 +277,14 @@ class AbsenCheckinController extends GetxController {
     } else {
       // KHUSUS DEBUGGING: tulis peta rute GPS sesi ini ke file HTML lokal
       // supaya bisa langsung diperiksa (lihat TrackingService.exportDebugMap).
-      // Tidak menambah UI apa pun & tidak pernah jalan di build production.
+      // Di-await (bukan fire-and-forget) supaya sempat membaca antrian
+      // SEBELUM stopTracking() membersihkannya. Tidak menambah UI apa pun &
+      // tidak pernah jalan di build production.
       if (kDebugMode) {
-        unawaited(TrackingService().exportDebugMap(satpamUuid: _satpamUuid));
+        await TrackingService().exportDebugMap(satpamUuid: _satpamUuid);
       }
-      unawaited(TrackingService().retryLeftoverSync(satpamUuid: _satpamUuid));
+      // stopTracking() membersihkan seluruh cache GPS lokal shift ini (lihat
+      // catatan MODE FALLBACK di TrackingService.stopTracking).
       await TrackingService().stopTracking();
       await cancelBackgroundTracking();
     }

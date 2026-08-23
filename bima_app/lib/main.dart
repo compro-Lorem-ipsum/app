@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 // Import views
 import 'views/auth/login_view.dart';
@@ -61,6 +62,10 @@ import 'controllers/panic/lokasi_panic_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
+  // Wajib dipanggil di isolate utama supaya bisa menerima data yang dikirim
+  // dari GpsTaskHandler (lihat services/gps_task_handler.dart) yang berjalan
+  // di isolate/FlutterEngine foreground service terpisah.
+  FlutterForegroundTask.initCommunicationPort();
   runApp(const MyApp());
 }
 
@@ -74,6 +79,9 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(fontFamily: 'Poppins'),
       initialRoute: '/login',
       smartManagement: SmartManagement.full,
+      // Supaya tombol back Android meminimalkan (bukan menutup) app selama
+      // foreground service GPS tracking aktif — lihat tracking_service.dart.
+      builder: (context, child) => WithForegroundTask(child: child ?? const SizedBox.shrink()),
       getPages: [
         GetPage(
           name: '/login',

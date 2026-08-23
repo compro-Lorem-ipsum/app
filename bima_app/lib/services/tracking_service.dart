@@ -4,9 +4,12 @@
 // diproses backend setelah check-out (lihat dokumentasi GPS Tracking).
 //
 // Empat lapis ketahanan: (1) GPS stream sebagai sumber utama, (2) timer
-// fallback yang memakai getLastKnownPosition kalau stream diam,
-// (3) watchdog yang me-restart stream kalau mati, dan (4) WorkManager
-// (lihat workmanager_callback.dart) sebagai heartbeat background.
+// fallback yang memakai getLastKnownPosition kalau stream diam, dan
+// (3) watchdog yang me-restart stream kalau mati — KETIGANYA berjalan di
+// dalam Android foreground service (lihat gps_task_handler.dart), bukan di
+// isolate utama, supaya tetap hidup walau layar mati/aplikasi di-minimize.
+// (4) WorkManager (lihat workmanager_callback.dart) sebagai heartbeat
+// tambahan kalau OEM tertentu tetap membunuh foreground service ini.
 //
 // MODE FALLBACK: endpoint `/v1/satpam-app/:uuid/tracking/batch` belum
 // tersedia di backend saat ini. Kalau pengiriman gagal karena backend
@@ -16,43 +19,41 @@
 // tanpa perlu backend menyala.
 
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'gps_task_handler.dart';
 import 'queue_service.dart';
+import 'tracking_prefs_keys.dart';
 
 class TrackingService {
   TrackingService._internal();
   static final TrackingService _instance = TrackingService._internal();
   factory TrackingService() => _instance;
 
-  static const double _minDistanceMeters = 15.0;
-  static const int _heartbeatSeconds = 60;
-  static const Duration _watchdogInterval = Duration(minutes: 2);
+  static const _serviceId = 990;
 
-  static const _prefKeyAccumDistance = 'tracking_accum_distance';
-  static const _prefKeyLastLat = 'tracking_last_lat';
-  static const _prefKeyLastLng = 'tracking_last_lng';
-  static const _prefKeyLastSavedAt = 'tracking_last_saved_at';
-  static const _prefKeyOnDuty = 'tracking_on_duty';
-  static const _prefKeyAbsensiUuid = 'tracking_absensi_uuid';
+  static const _prefKeyAccumDistance = TrackingPrefKeys.accumDistance;
+  static const _prefKeyLastLat = TrackingPrefKeys.lastLat;
+  static const _prefKeyLastLng = TrackingPrefKeys.lastLng;
+  static const _prefKeyLastSavedAt = TrackingPrefKeys.lastSavedAt;
+  static const _prefKeyOnDuty = TrackingPrefKeys.onDuty;
+  static const _prefKeyAbsensiUuid = TrackingPrefKeys.absensiUuid;
 
   static const _downloadsChannel = MethodChannel('bima_app/downloads');
 
-  StreamSubscription<Position>? _positionSub;
-  Timer? _watchdogTimer;
-  Timer? _fallbackTimer;
-  DateTime? _lastEmitAt;
   bool _isTracking = false;
 
   /// Mulai merekam titik GPS untuk shift saat ini. Dipanggil setelah
-  /// check-in berhasil.
+  /// check-in berhasil. GPS stream sesungguhnya berjalan di dalam Android
+  /// foreground service (gps_task_handler.dart), bukan di sini, supaya
+  /// tetap hidup walau layar mati.
   Future<void> startTracking({required String absensiUuid}) async {
     if (_isTracking) return;
     _isTracking = true;
@@ -66,74 +67,61 @@ class TrackingService {
     // menunda mulainya tracking shift baru ini.
     unawaited(flushLeftoverInBackground());
 
-    _startPositionStream();
-    _startWatchdogAndFallback();
+    await _ensurePermissions();
+    _initForegroundTask();
+    await _startForegroundService();
 
     debugPrint('TrackingService: tracking dimulai untuk $absensiUuid');
   }
 
-  void _startPositionStream() {
-    _positionSub?.cancel();
-    _lastEmitAt = DateTime.now();
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5),
-    ).listen(
-      _onPosition,
-      onError: (Object e) => debugPrint('TrackingService: gps stream error: $e'),
+  /// Minta izin lokasi (termasuk latar belakang) dan izin notifikasi
+  /// (Android 13+, wajib supaya notifikasi foreground service tampil).
+  Future<void> _ensurePermissions() async {
+    final notifPermission = await FlutterForegroundTask.checkNotificationPermission();
+    if (notifPermission != NotificationPermission.granted) {
+      await FlutterForegroundTask.requestNotificationPermission();
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.whileInUse) {
+      // Android 11+ mewajibkan izin lokasi "sepanjang waktu" diminta
+      // terpisah, setelah izin "saat digunakan" sudah disetujui lebih dulu.
+      permission = await Geolocator.requestPermission();
+    }
+  }
+
+  void _initForegroundTask() {
+    FlutterForegroundTask.init(
+      androidNotificationOptions: AndroidNotificationOptions(
+        channelId: 'bima_gps_tracking',
+        channelName: 'Pelacakan Lokasi Patroli',
+        channelDescription: 'Notifikasi ini tampil selama Anda sedang bertugas dan lokasi sedang direkam.',
+        onlyAlertOnce: true,
+      ),
+      iosNotificationOptions: const IOSNotificationOptions(),
+      foregroundTaskOptions: ForegroundTaskOptions(
+        eventAction: ForegroundTaskEventAction.nothing(),
+        allowWakeLock: true,
+        allowWifiLock: true,
+      ),
     );
   }
 
-  void _startWatchdogAndFallback() {
-    _watchdogTimer?.cancel();
-    // Lapis 3: restart stream kalau sudah diam lebih dari satu periode
-    // watchdog (mis. foreground service dibunuh OS pada beberapa HP).
-    _watchdogTimer = Timer.periodic(_watchdogInterval, (_) {
-      final lastEmit = _lastEmitAt;
-      if (lastEmit != null && DateTime.now().difference(lastEmit) > _watchdogInterval) {
-        debugPrint('TrackingService: watchdog mendeteksi stream diam, restart...');
-        _startPositionStream();
-      }
-    });
-
-    _fallbackTimer?.cancel();
-    // Lapis 2: kalau stream belum sempat emit satu titik pun dalam satu
-    // periode heartbeat, pakai posisi terakhir yang diketahui agar antrian
-    // tidak kosong.
-    _fallbackTimer = Timer.periodic(const Duration(seconds: _heartbeatSeconds), (_) async {
-      final lastEmit = _lastEmitAt;
-      if (lastEmit != null && DateTime.now().difference(lastEmit) < const Duration(seconds: _heartbeatSeconds)) {
-        return;
-      }
-      try {
-        final last = await Geolocator.getLastKnownPosition();
-        if (last != null) await _onPosition(last);
-      } catch (e) {
-        debugPrint('TrackingService: fallback timer gagal: $e');
-      }
-    });
-  }
-
-  Future<void> _onPosition(Position position) async {
-    _lastEmitAt = DateTime.now();
-
-    final prefs = await SharedPreferences.getInstance();
-    final lastLat = prefs.getDouble(_prefKeyLastLat);
-    final lastLng = prefs.getDouble(_prefKeyLastLng);
-    final lastSavedAt = DateTime.tryParse(prefs.getString(_prefKeyLastSavedAt) ?? '');
-
-    final isFirstPoint = lastLat == null || lastLng == null;
-    final movedMeters =
-        isFirstPoint ? 0.0 : Geolocator.distanceBetween(lastLat, lastLng, position.latitude, position.longitude);
-    final secondsSinceLastSave =
-        lastSavedAt == null ? _heartbeatSeconds + 1 : DateTime.now().difference(lastSavedAt).inSeconds;
-
-    final shouldSave = isFirstPoint || movedMeters >= _minDistanceMeters || secondsSinceLastSave >= _heartbeatSeconds;
-    if (!shouldSave) return;
-
-    final accumulated = (prefs.getDouble(_prefKeyAccumDistance) ?? 0) + movedMeters;
-    await prefs.setDouble(_prefKeyAccumDistance, accumulated);
-    await _rememberLastPoint(prefs, position);
-    await _enqueueCurrent(prefs, position);
+  Future<void> _startForegroundService() async {
+    if (await FlutterForegroundTask.isRunningService) {
+      await FlutterForegroundTask.restartService();
+      return;
+    }
+    await FlutterForegroundTask.startService(
+      serviceId: _serviceId,
+      serviceTypes: const [ForegroundServiceTypes.location],
+      notificationTitle: 'Sedang merekam patroli',
+      notificationText: '',
+      callback: gpsTaskStartCallback,
+    );
   }
 
   Future<void> _rememberLastPoint(SharedPreferences prefs, Position position) async {
@@ -153,12 +141,12 @@ class TrackingService {
   }
 
   /// Hentikan sementara penangkapan titik (dipanggil di awal proses
-  /// check-out, sebelum flush terakhir).
+  /// check-out, sebelum flush terakhir). Checkout selalu berlangsung dengan
+  /// app di foreground, jadi aman menghentikan foreground service di sini —
+  /// captureFinalPoint() di bawah mengambil satu titik penutup langsung
+  /// dari isolate utama.
   Future<void> pauseCapture() async {
-    await _positionSub?.cancel();
-    _positionSub = null;
-    _watchdogTimer?.cancel();
-    _fallbackTimer?.cancel();
+    await FlutterForegroundTask.stopService();
   }
 
   /// Ambil satu titik penutup shift. Selalu disimpan meski belum genap
@@ -166,8 +154,9 @@ class TrackingService {
   /// check-out.
   Future<void> captureFinalPoint() async {
     try {
-      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high)
-          .timeout(const Duration(seconds: 5));
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      ).timeout(const Duration(seconds: 5));
       final prefs = await SharedPreferences.getInstance();
       await _rememberLastPoint(prefs, position);
       await _enqueueCurrent(prefs, position);
@@ -219,35 +208,12 @@ class TrackingService {
       return false;
     } catch (e) {
       // MODE FALLBACK (backend belum tersedia): titik tetap aman di
-      // antrian lokal untuk dicoba lagi nanti oleh retryLeftoverSync().
+      // antrian lokal, tapi karena belum ada backend untuk benar-benar
+      // menyimpannya, cache ini akan dibuang begitu saja di stopTracking()
+      // begitu shift ini selesai (lihat catatan di sana).
       debugPrint('TrackingService: flush gagal, mode offline/testing: $e');
       return false;
     }
-  }
-
-  /// Retry sisa antrian di background setelah check-out sukses, dengan
-  /// exponential backoff + jitter (mulai 15 detik, maks 5 menit, sampai
-  /// ~10 percobaan / ~10 menit total).
-  Future<void> retryLeftoverSync({required String satpamUuid}) async {
-    const maxAttempts = 10;
-    const maxDelayMs = 5 * 60 * 1000;
-    var delayMs = 15 * 1000;
-    final random = Random();
-
-    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
-      final pending = await QueueService().getPending();
-      if (pending.isEmpty) return;
-
-      final jitterMs = random.nextInt(1000);
-      await Future.delayed(Duration(milliseconds: delayMs + jitterMs));
-
-      final ok = await _flushOnce(satpamUuid: satpamUuid);
-      if (ok) return;
-
-      delayMs = min(delayMs * 2, maxDelayMs);
-    }
-    debugPrint('TrackingService: retryLeftoverSync berhenti setelah $maxAttempts percobaan, '
-        'masih ada sisa di antrian lokal (akan dicoba lagi saat shift berikutnya dimulai).');
   }
 
   /// Kirim sisa antrian dari shift SEBELUMNYA yang belum ter-flush,
@@ -261,6 +227,15 @@ class TrackingService {
   }
 
   /// Sudahi tracking untuk shift ini (dipanggil setelah check-out sukses).
+  ///
+  /// MODE FALLBACK: selain menghentikan foreground service, ini juga
+  /// mengosongkan SELURUH antrian lokal (synced maupun belum). Idealnya
+  /// titik yang gagal terkirim dipertahankan untuk di-retry, tapi karena
+  /// endpoint batch belum tersedia di backend DAN setiap shift masih
+  /// memakai `absensi_uuid` placeholder yang sama, titik gagal yang
+  /// dibiarkan nyantol akan ikut kebawa ke rute shift berikutnya. Setelah
+  /// backend & uuid per-sesi sungguhan tersedia, ganti ini dengan retry
+  /// yang mempertahankan titik gagal per sesi.
   Future<void> stopTracking() async {
     await pauseCapture();
     _isTracking = false;
@@ -270,6 +245,7 @@ class TrackingService {
     await prefs.remove(_prefKeyLastLng);
     await prefs.remove(_prefKeyLastSavedAt);
     await prefs.remove(_prefKeyAccumDistance);
+    await QueueService().clearAll();
   }
 
   Future<bool> isOnDuty() async {
