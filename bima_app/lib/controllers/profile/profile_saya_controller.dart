@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../services/auth_service.dart';
+
 class ProfileSayaController extends GetxController {
   static const primaryColor = Color(0xFF122C93);
 
@@ -12,7 +14,8 @@ class ProfileSayaController extends GetxController {
     Get.toNamed('/unggah-berkas');
   }
 
-  void logout() {
+  Future<void> logout() async {
+    await AuthService().clearSession();
     Get.offAllNamed('/login');
   }
 }

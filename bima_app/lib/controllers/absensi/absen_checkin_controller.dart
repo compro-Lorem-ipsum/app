@@ -180,7 +180,7 @@ class AbsenCheckinController extends GetxController {
       });
 
       final response = await GetConnect().post(
-        "$BASE_API_URL/v1/absensi/record",
+        "$BASE_API_URL/absensi/record",
         form,
       );
 

@@ -49,7 +49,8 @@ class RegisterKontakJabatanController extends GetxController {
     final email = emailController.text.trim();
     final phone = phoneController.text.trim();
 
-    if (email.isEmpty || !email.contains('@')) {
+    // Double check di FE mengikuti aturan backend: format email harus valid.
+    if (email.isEmpty || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       Get.snackbar(
         'Email tidak valid',
         'Masukan alamat email yang benar.',
@@ -64,6 +65,30 @@ class RegisterKontakJabatanController extends GetxController {
       Get.snackbar(
         'Nomor HP wajib diisi',
         'Masukan nomor HP yang terhubung dengan WhatsApp.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    // Double check di FE mengikuti aturan backend: nomor HP hanya angka,
+    // panjang 8-15 digit (lihat skenario test nomor HP di dokumentasi API).
+    if (!RegExp(r'^\d+$').hasMatch(phone)) {
+      Get.snackbar(
+        'Nomor HP tidak valid',
+        'Nomor HP hanya boleh berisi angka, tanpa huruf atau simbol.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    if (phone.length < 8 || phone.length > 15) {
+      Get.snackbar(
+        'Nomor HP tidak valid',
+        'Nomor HP harus terdiri dari 8-15 digit.',
         backgroundColor: Colors.red,
         colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
@@ -86,7 +111,8 @@ class RegisterKontakJabatanController extends GetxController {
       ..._previousData,
       'email': email,
       'phone': phone,
-      'jabatan': selectedJabatan.value,
+      // API menerima jabatan huruf kecil ('anggota'/'danru'/'chief').
+      'jabatan': selectedJabatan.value!.toLowerCase(),
     };
 
     Get.toNamed('/register-akun-part3', arguments: data);

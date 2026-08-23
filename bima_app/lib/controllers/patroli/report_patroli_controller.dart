@@ -97,7 +97,7 @@ class ReportPatroliController extends GetxController {
 
   // ===== API OPTIONS =====
   Future<void> fetchSatpam() async {
-    final res = await GetConnect().get("$BASE_API_URL/v1/patroli/options");
+    final res = await GetConnect().get("$BASE_API_URL/patroli/options");
     if (res.body?['data'] != null) {
       listSatpam.value = res.body['data'];
     }
@@ -119,7 +119,7 @@ class ReportPatroliController extends GetxController {
     listPos.clear();
 
     final res =
-        await GetConnect().get("$BASE_API_URL/v1/patroli/options/$satpamUuid");
+        await GetConnect().get("$BASE_API_URL/patroli/options/$satpamUuid");
     if (res.body?['data'] != null) {
       listPos.value = res.body['data'];
     }
@@ -164,7 +164,7 @@ class ReportPatroliController extends GetxController {
 
       // === STEP 1: GET UPLOAD URL ===
       final urlRes =
-          await GetConnect().get("$BASE_API_URL/v1/patroli/upload-urls");
+          await GetConnect().get("$BASE_API_URL/patroli/upload-urls");
 
       if (urlRes.body?['data'] == null) {
         throw "Gagal mendapatkan upload URL";
@@ -215,7 +215,7 @@ class ReportPatroliController extends GetxController {
       };
 
       final reportRes = await GetConnect().post(
-        "$BASE_API_URL/v1/patroli",
+        "$BASE_API_URL/patroli",
         payload,
         headers: {"Content-Type": "application/json"},
       );

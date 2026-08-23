@@ -73,6 +73,30 @@ class RegisterAkunPart1Controller extends GetxController {
       return;
     }
 
+    // Double check di FE mengikuti aturan backend: NIP hanya angka (tidak
+    // boleh ada huruf/simbol) dan minimal 2 digit.
+    if (!RegExp(r'^\d+$').hasMatch(nip)) {
+      Get.snackbar(
+        'NIP tidak valid',
+        'NIP hanya boleh berisi angka, tanpa huruf atau simbol.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    if (nip.length < 2) {
+      Get.snackbar(
+        'NIP tidak valid',
+        'NIP terlalu pendek, masukan NIP yang lengkap.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
     if (selectedGender.value == null) {
       Get.snackbar(
         'Jenis kelamin belum dipilih',
@@ -99,7 +123,9 @@ class RegisterAkunPart1Controller extends GetxController {
       ..._previousData,
       'namaLengkap': namaLengkap,
       'nip': nip,
-      'gender': selectedGender.value,
+      // API menerima gender sebagai kode angka ('1' Laki-laki, '2' Perempuan)
+      // — indeks di genderOptions kebetulan cocok (0->1, 1->2).
+      'gender': (genderOptions.indexOf(selectedGender.value!) + 1).toString(),
       'asalDaerah': asalDaerah,
     };
 

@@ -11,7 +11,7 @@
 // (4) WorkManager (lihat workmanager_callback.dart) sebagai heartbeat
 // tambahan kalau OEM tertentu tetap membunuh foreground service ini.
 //
-// MODE FALLBACK: endpoint `/v1/satpam-app/:uuid/tracking/batch` belum
+// MODE FALLBACK: endpoint `/satpam-app/:uuid/tracking/batch` belum
 // tersedia di backend saat ini. Kalau pengiriman gagal karena backend
 // tidak terjangkau, titik TETAP tersimpan aman di antrian lokal (tidak
 // hilang, tidak ditandai synced) dan proses check-out tetap boleh lanjut
@@ -186,7 +186,7 @@ class TrackingService {
       final baseUrl = dotenv.env['BASE_API_URL'];
       final response = await GetConnect()
           .post(
-            '$baseUrl/v1/satpam-app/$satpamUuid/tracking/batch',
+            '$baseUrl/satpam-app/$satpamUuid/tracking/batch',
             {
               'points': pending
                   .map((p) => {

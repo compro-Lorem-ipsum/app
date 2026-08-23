@@ -15,7 +15,7 @@ class RegisterAkunPart4View extends GetView<RegisterAkunPart4Controller> {
 
   @override
   Widget build(BuildContext context) {
-    return WizardScaffold(
+    return Obx(() => WizardScaffold(
       header: WizardHeader(
         currentStep: controller.currentStep,
         totalSteps: controller.totalSteps,
@@ -64,8 +64,10 @@ class RegisterAkunPart4View extends GetView<RegisterAkunPart4Controller> {
               )),
         ],
       ),
-      buttonLabel: 'Daftar Sekarang',
-      onButtonPressed: controller.handleLanjutkan,
-    );
+      buttonLabel: controller.isSubmitting.value
+          ? (controller.submitStatus.value.isEmpty ? 'Mendaftar...' : controller.submitStatus.value)
+          : 'Daftar Sekarang',
+      onButtonPressed: controller.isSubmitting.value ? null : controller.handleLanjutkan,
+    ));
   }
 }

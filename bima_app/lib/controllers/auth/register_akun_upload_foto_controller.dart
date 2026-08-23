@@ -28,7 +28,10 @@ class RegisterAkunUploadFotoController extends GetxController {
 
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png'],
+      // Sesuai kontrak backend: jpg/png/webp diterima (201), format lain
+      // ditolak (400) — lihat catatan skenario test avatar di
+      // register_akun_part4_controller.dart.
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
     );
 
     final path = result?.files.single.path;
@@ -67,6 +70,7 @@ class RegisterAkunUploadFotoController extends GetxController {
 
     final data = {
       ..._previousData,
+      'photoPath': photoPath.value,
     };
 
     Get.toNamed('/register-akun-part4', arguments: data);

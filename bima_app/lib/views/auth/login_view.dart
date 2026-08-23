@@ -91,7 +91,11 @@ class LoginView extends GetView<LoginController> {
                             ],
                           ),
                           const SizedBox(height: 24),
-                          PrimaryButton(label: 'Masuk', onPressed: controller.handleMasuk, borderRadius: 20),
+                          Obx(() => PrimaryButton(
+                                label: controller.isSubmitting.value ? 'Memproses...' : 'Masuk',
+                                onPressed: controller.isSubmitting.value ? null : controller.handleMasuk,
+                                borderRadius: 20,
+                              )),
                           const SizedBox(height: 24),
                           Container(height: 1, color: AppColors.cardBorder),
                           const SizedBox(height: 16),
