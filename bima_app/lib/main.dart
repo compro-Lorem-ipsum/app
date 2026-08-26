@@ -8,6 +8,8 @@ import 'package:get/get.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+import 'services/auth_service.dart';
+
 // Import views
 import 'views/auth/login_view.dart';
 import 'views/auth/lupa_password_part1_view.dart';
@@ -66,18 +68,32 @@ Future<void> main() async {
   // dari GpsTaskHandler (lihat services/gps_task_handler.dart) yang berjalan
   // di isolate/FlutterEngine foreground service terpisah.
   FlutterForegroundTask.initCommunicationPort();
-  runApp(const MyApp());
+
+  // Kalau sesi login sebelumnya tidak dicentang "Ingat Saya", hapus di sini
+  // supaya cold-start ini kembali minta login (lihat AuthService).
+  await AuthService().clearSessionIfNotRemembered();
+  var isLoggedIn = await AuthService().isLoggedIn();
+  if (isLoggedIn) {
+    // Validasi juga ke server (GET /auth/me) supaya token yang di-revoke
+    // di sisi backend ketahuan walau klaim exp JWT-nya belum lewat.
+    // Offline-tolerant — lihat AuthService.validateSessionWithServer().
+    isLoggedIn = await AuthService().validateSessionWithServer();
+  }
+
+  runApp(MyApp(initialRoute: isLoggedIn ? '/' : '/login'));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String initialRoute;
+
+  const MyApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(fontFamily: 'Poppins'),
-      initialRoute: '/login',
+      initialRoute: initialRoute,
       smartManagement: SmartManagement.full,
       // Supaya tombol back Android meminimalkan (bukan menutup) app selama
       // foreground service GPS tracking aktif — lihat tracking_service.dart.

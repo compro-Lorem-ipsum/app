@@ -14,7 +14,7 @@ class LupaPasswordPart1View extends GetView<LupaPasswordController> {
 
   @override
   Widget build(BuildContext context) {
-    return WizardScaffold(
+    return Obx(() => WizardScaffold(
       header: WizardHeader(
         currentStep: 1,
         totalSteps: 2,
@@ -56,8 +56,8 @@ class LupaPasswordPart1View extends GetView<LupaPasswordController> {
           ),
         ],
       ),
-      buttonLabel: 'Kirim OTP',
-      onButtonPressed: controller.handleKirimOtp,
-    );
+      buttonLabel: controller.isSendingOtp.value ? 'Mengirim...' : 'Kirim OTP',
+      onButtonPressed: controller.isSendingOtp.value ? null : controller.handleKirimOtp,
+    ));
   }
 }

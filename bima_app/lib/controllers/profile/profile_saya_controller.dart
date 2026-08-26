@@ -15,7 +15,7 @@ class ProfileSayaController extends GetxController {
   }
 
   Future<void> logout() async {
-    await AuthService().clearSession();
+    await AuthService().logout();
     Get.offAllNamed('/login');
   }
 }

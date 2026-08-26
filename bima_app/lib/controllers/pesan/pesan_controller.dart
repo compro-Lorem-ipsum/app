@@ -1,18 +1,31 @@
 // Controller untuk halaman Pesan (pesan satu arah dari mitra/client).
+// Data diambil dari GET /posts (Authorization Bearer token, tanpa body).
+// Shape item post belum dikonfirmasi persis oleh backend — diasumsikan
+// mengikuti pola yang sama dengan /announcement (title, description,
+// datetime), gampang disesuaikan begitu contoh respons asli tersedia.
+//
+// Item panic alert (isPanic) di layar ini sebelumnya cuma mock/demo UI —
+// belum ada mekanisme real-time (push/socket) yang mengisinya, jadi tidak
+// ada lagi dummy panic item begitu data asli dari /posts dipakai di sini.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
+import '../../services/auth_service.dart';
+
+final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
+
 class PesanItem {
-  final String sender;
+  final String title;
   final String time;
   final String preview;
   final String fullBody;
   final bool isPanic;
-  final bool isRead;
+  bool isRead;
 
   PesanItem({
-    required this.sender,
+    required this.title,
     required this.time,
     required this.preview,
     String? fullBody,
@@ -24,48 +37,59 @@ class PesanItem {
 class PesanController extends GetxController {
   static const primaryColor = Color(0xFF122C93);
 
-  final messages = <PesanItem>[
-    PesanItem(
-      sender: 'Nama Satpam',
-      time: 'Hari ini · 02:31',
-      preview: 'menekan tombol panik. Segera periksa lokasinya.',
-      isPanic: true,
-    ),
-    PesanItem(
-      sender: 'Nama Mitra',
-      time: 'Hari ini · 19:31',
-      preview:
-          'Radius check-in di Pos Utama diperluas dari 50m menjadi 80m mulai shift ini untuk mengakomodasi kondisi lapangan.',
-    ),
-    PesanItem(
-      sender: 'Nama Mitra',
-      time: 'Hari ini · 19:31',
-      preview:
-          'Diharapkan kepada seluruh personel untuk memperhatikan jadwal patroli pada shift ini dengan saksama. Pelaksanaan ronda wajib dilakukan secara rutin setiap 2 jam guna meminimalisir risiko keamanan...',
-      fullBody:
-          'Diharapkan kepada seluruh personel untuk memperhatikan jadwal patroli pada shift ini dengan saksama. Pelaksanaan ronda wajib dilakukan secara rutin setiap 2 jam guna meminimalisir risiko keamanan, dan Anda diwajibkan untuk langsung melaporkan kondisi lingkungan terkini melalui aplikasi sistem. Sebelum memasuki pukul 23:00, pastikan kepastian status semua pintu dalam keadaan terkunci rapat tanpa ada yang terlewat.',
-    ),
-    PesanItem(
-      sender: 'Nama Mitra',
-      time: 'Hari ini · 19:31',
-      preview: 'Isi Pesan',
-      isRead: true,
-    ),
-  ].obs;
+  final messages = <PesanItem>[].obs;
+  final isLoading = false.obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    fetchPosts();
+  }
+
+  Future<void> fetchPosts() async {
+    isLoading.value = true;
+    try {
+      final token = await AuthService().getAccessToken();
+      final response = await GetConnect().get(
+        '$BASE_API_URL/posts',
+        headers: token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
+      );
+
+      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+      final data = ok && response.body is Map ? response.body['data'] : null;
+      if (data is! List) {
+        debugPrint('PesanController: gagal ambil pesan (status ${response.statusCode}).');
+        return;
+      }
+
+      messages.value = data.whereType<Map>().map((p) {
+        final datetime = DateTime.tryParse((p['datetime'] ?? '').toString())?.toLocal();
+        return PesanItem(
+          title: (p['title'] ?? '').toString(),
+          time: datetime != null ? _formatTime(datetime) : '-',
+          preview: (p['description'] ?? '').toString(),
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('PesanController: gagal ambil pesan: $e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  String _formatTime(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final hm = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return isToday ? 'Hari ini · $hm' : '${dt.day}/${dt.month}/${dt.year} · $hm';
+  }
 
   int get unreadCount => messages.where((m) => !m.isRead).length;
 
-  void notAvailable() {
-    Get.snackbar(
-      'Segera Hadir',
-      'Fitur ini belum tersedia.',
-      backgroundColor: primaryColor,
-      colorText: Colors.white,
-      snackPosition: SnackPosition.BOTTOM,
-    );
-  }
-
   void openMessage(PesanItem item) {
+    item.isRead = true;
+    messages.refresh();
+
     Get.dialog(
       Align(
         alignment: Alignment.bottomCenter,
@@ -81,7 +105,7 @@ class PesanController extends GetxController {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                item.sender,
+                item.title,
                 style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: primaryColor),
               ),
               const SizedBox(height: 16),

@@ -118,6 +118,7 @@ class LoginController extends GetxController {
           refreshToken: data['refresh_token'] as String,
           refreshExpiresAt: data['refresh_expires_at'] as String,
           user: Map<String, dynamic>.from(user),
+          rememberMe: rememberMe.value,
         );
 
         Get.offAllNamed('/');

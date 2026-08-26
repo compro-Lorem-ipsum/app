@@ -110,13 +110,13 @@ class PesanView extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              Text(item.sender, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black)),
+              Text(item.title, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black)),
               const SizedBox(height: 6),
               Text(item.preview, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.black)),
               const SizedBox(height: 12),
               GestureDetector(
                 onTap: () => Get.toNamed('/lokasi-panic', arguments: {
-                  'satpamName': item.sender,
+                  'satpamName': item.title,
                   'time': item.time,
                 }),
                 child: Row(
@@ -143,7 +143,7 @@ class PesanView extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(item.sender, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: primaryColor)),
+                    Text(item.title, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: primaryColor)),
                     Text(item.time, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
                   ],
                 ),

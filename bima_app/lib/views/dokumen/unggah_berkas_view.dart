@@ -156,16 +156,30 @@ class UnggahBerkasView extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if (!slot.uploaded)
-                GestureDetector(
-                  onTap: () => controller.upload(slot),
-                  child: const Icon(Icons.cloud_upload_outlined, color: AppColors.primary, size: 30),
-                )
-              else
-                GestureDetector(
-                  onTap: () => controller.remove(slot),
-                  child: SvgPicture.asset('assets/icons/delete_circle.svg', width: 30, height: 30),
-                ),
+              Obx(() {
+                final isProcessingThis = controller.processingKey.value == slot.key;
+                if (isProcessingThis) {
+                  return const SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary),
+                  );
+                }
+                final isBusy = controller.processingKey.value != null;
+                if (!slot.uploaded) {
+                  return GestureDetector(
+                    onTap: isBusy ? null : () => controller.upload(slot),
+                    child: Icon(Icons.cloud_upload_outlined, color: isBusy ? AppColors.disabled : AppColors.primary, size: 30),
+                  );
+                }
+                return GestureDetector(
+                  onTap: isBusy ? null : () => controller.remove(slot),
+                  child: Opacity(
+                    opacity: isBusy ? 0.4 : 1,
+                    child: SvgPicture.asset('assets/icons/delete_circle.svg', width: 30, height: 30),
+                  ),
+                );
+              }),
             ],
           ),
         ],

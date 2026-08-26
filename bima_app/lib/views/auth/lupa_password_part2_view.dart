@@ -14,7 +14,7 @@ class LupaPasswordPart2View extends GetView<LupaPasswordController> {
 
   @override
   Widget build(BuildContext context) {
-    return WizardScaffold(
+    return Obx(() => WizardScaffold(
       header: WizardHeader(
         currentStep: 2,
         totalSteps: 2,
@@ -56,8 +56,11 @@ class LupaPasswordPart2View extends GetView<LupaPasswordController> {
           Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
-              onTap: controller.handleKirimUlang,
-              child: Text('Kirim Ulang', style: AppText.semiBold.copyWith(fontSize: 12, color: AppColors.primary)),
+              onTap: controller.isSendingOtp.value ? null : controller.handleKirimUlang,
+              child: Text(
+                controller.isSendingOtp.value ? 'Mengirim...' : 'Kirim Ulang',
+                style: AppText.semiBold.copyWith(fontSize: 12, color: AppColors.primary),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -92,9 +95,9 @@ class LupaPasswordPart2View extends GetView<LupaPasswordController> {
               )),
         ],
       ),
-      buttonLabel: 'Reset Password',
-      onButtonPressed: controller.handleResetPassword,
-    );
+      buttonLabel: controller.isResetting.value ? 'Memproses...' : 'Reset Password',
+      onButtonPressed: controller.isResetting.value ? null : controller.handleResetPassword,
+    ));
   }
 
   Widget _buildOtpBox(int index) {

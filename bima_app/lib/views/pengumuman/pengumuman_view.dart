@@ -123,10 +123,18 @@ class PengumumanView extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: disabledColor),
             ),
-            const SizedBox(height: 10),
-            Container(height: 1, color: cardBorderColor),
-            const SizedBox(height: 8),
-            Text(announcement['admin'], style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: disabledColor)),
+            if ((announcement['location'] as String?)?.isNotEmpty ?? false) ...[
+              const SizedBox(height: 10),
+              Container(height: 1, color: cardBorderColor),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.location_on_outlined, size: 14, color: disabledColor),
+                  const SizedBox(width: 4),
+                  Text(announcement['location'], style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: disabledColor)),
+                ],
+              ),
+            ],
           ],
         ),
       ),

@@ -143,13 +143,21 @@ class IsiPengumumanView extends StatelessWidget {
             announcement['body'] ?? '',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: disabledColor, height: 1.6),
           ),
-          const SizedBox(height: 16),
-          Container(height: 1, color: cardBorderColor),
-          const SizedBox(height: 12),
-          Text(
-            announcement['admin'] ?? '',
-            style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black),
-          ),
+          if ((announcement['location'] as String?)?.isNotEmpty ?? false) ...[
+            const SizedBox(height: 16),
+            Container(height: 1, color: cardBorderColor),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, size: 16, color: primaryColor),
+                const SizedBox(width: 6),
+                Text(
+                  announcement['location'],
+                  style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

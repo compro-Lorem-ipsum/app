@@ -32,19 +32,29 @@ class RekanKerjaView extends StatelessWidget {
                   const SizedBox(height: 12),
                   _buildSubtitle(),
                   const SizedBox(height: 16),
-                  _buildLocationBanner(),
+                  Obx(() => _buildLocationBanner(controller)),
                 ],
               ),
             ),
             Expanded(
-              child: Obx(() => ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
-                    itemCount: controller.rekan.length,
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildContactCard(controller, controller.rekan[index]),
-                    ),
-                  )),
+              child: Obx(() {
+                if (controller.isLoading.value && controller.rekan.isEmpty) {
+                  return const Center(child: CircularProgressIndicator(color: primaryColor));
+                }
+                if (controller.rekan.isEmpty) {
+                  return Center(
+                    child: Text('Belum ada rekan kerja.', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
+                  itemCount: controller.rekan.length,
+                  itemBuilder: (context, index) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildContactCard(controller, controller.rekan[index]),
+                  ),
+                );
+              }),
             ),
           ],
         ),
@@ -78,7 +88,8 @@ class RekanKerjaView extends StatelessWidget {
     );
   }
 
-  Widget _buildLocationBanner() {
+  Widget _buildLocationBanner(RekanKerjaController controller) {
+    final clientNama = controller.clientNama.value;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -90,12 +101,15 @@ class RekanKerjaView extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Lokasi Penugasan Anda', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
-              SizedBox(height: 2),
-              Text('Nama Mitra', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: primaryColor)),
+              const Text('Lokasi Penugasan Anda', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+              const SizedBox(height: 2),
+              Text(
+                clientNama.isEmpty ? '-' : clientNama,
+                style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: primaryColor),
+              ),
             ],
           ),
           Row(
@@ -105,7 +119,7 @@ class RekanKerjaView extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-                child: const Text('15 Rekan', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 9, color: Colors.black)),
+                child: Text('${controller.rekan.length} Rekan', style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 9, color: Colors.black)),
               ),
             ],
           ),
