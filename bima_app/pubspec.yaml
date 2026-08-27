@@ -53,6 +53,7 @@ dependencies:
   shared_preferences: ^2.5.5
   workmanager: ^0.9.0+3
   flutter_foreground_task: ^10.0.0
+  indonesia_regions: ^1.0.0
 
 dev_dependencies:
   flutter_test:

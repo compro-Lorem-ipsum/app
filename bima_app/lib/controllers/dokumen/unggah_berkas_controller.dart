@@ -1,11 +1,10 @@
 // Controller untuk halaman Unggah Berkas (KTP, BPJS, NPWP).
-// Setiap dokumen diunggah lewat GCS signed POST policy (dua langkah, sama
-// seperti avatar registrasi — lihat register_akun_part4_controller.dart):
+// Setiap dokumen diunggah lewat GCS signed POST policy (dua langkah, PERSIS
+// sama seperti avatar registrasi — lihat register_akun_part4_controller.dart):
 // (1) POST /documents/upload-url minta link upload, (2) POST file langsung
 // ke bucket GCS pakai field-field yang dikembalikan, (3) POST /documents/
-// menyimpan referensinya di backend (`document_path` = `path` dari langkah
-// 1, BUKAN object_uuid — beda dari alur avatar registrasi). Semua endpoint
-// /documents/* butuh header Authorization Bearer token.
+// menyimpan referensinya di backend dengan `object_uuid` hasil langkah 1.
+// Semua endpoint /documents/* butuh header Authorization Bearer token.
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -131,7 +130,7 @@ class UnggahBerkasController extends GetxController {
         return;
       }
 
-      final documentPath = linkData['path'] as String;
+      final objectUuid = linkData['object_uuid'] as String;
       final uploadUrl = linkData['upload_url'] as String;
       final fields = Map<String, dynamic>.from(linkData['fields'] as Map);
       final contentType = (linkData['content_type'] as String?) ?? fields['Content-Type'] as String? ?? 'application/octet-stream';
@@ -155,7 +154,7 @@ class UnggahBerkasController extends GetxController {
       saveHeaders['Content-Type'] = 'application/json';
       final saveResponse = await GetConnect().post(
         '$BASE_API_URL/documents/',
-        {'type': slot.key, 'document_path': documentPath},
+        {'type': slot.key, 'object_uuid': objectUuid},
         headers: saveHeaders,
       );
       final saveOk = saveResponse.statusCode != null && saveResponse.statusCode! >= 200 && saveResponse.statusCode! < 300;
