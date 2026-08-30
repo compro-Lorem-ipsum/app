@@ -34,6 +34,7 @@ import 'views/dokumen/rep_doks_view.dart';
 import 'views/rekan_kerja/rekan_kerja_view.dart';
 import 'views/aktifitas/aktifitas_saya_view.dart';
 import 'views/profile/profile_saya_view.dart';
+import 'views/profile/tambah_kontak_darurat_view.dart';
 import 'views/dokumen/unggah_berkas_view.dart';
 import 'views/panic/lokasi_panic_view.dart';
 
@@ -58,6 +59,7 @@ import 'controllers/dokumen/rep_doks_controller.dart';
 import 'controllers/rekan_kerja/rekan_kerja_controller.dart';
 import 'controllers/aktifitas/aktifitas_saya_controller.dart';
 import 'controllers/profile/profile_saya_controller.dart';
+import 'controllers/profile/tambah_kontak_darurat_controller.dart';
 import 'controllers/dokumen/unggah_berkas_controller.dart';
 import 'controllers/panic/lokasi_panic_controller.dart';
 
@@ -268,6 +270,14 @@ class MyApp extends StatelessWidget {
           }),
           transition: Transition.fadeIn,
           transitionDuration: const Duration(milliseconds: 220),
+        ),
+
+        GetPage(
+          name: '/tambah-kontak-darurat',
+          page: () => const TambahKontakDaruratView(),
+          binding: BindingsBuilder(() {
+            Get.lazyPut(() => TambahKontakDaruratController());
+          }),
         ),
 
         GetPage(

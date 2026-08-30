@@ -52,6 +52,10 @@ class ProfileSayaView extends StatelessWidget {
                     const SizedBox(height: 8),
                     _buildKontakCard(),
                     const SizedBox(height: 20),
+                    const Text('Kontak Darurat', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black)),
+                    const SizedBox(height: 8),
+                    Obx(() => _buildKontakDaruratCard(controller)),
+                    const SizedBox(height: 20),
                     _buildLogoutButton(controller),
                   ],
                 ),
@@ -258,6 +262,86 @@ class ProfileSayaView extends StatelessWidget {
           _buildInfoRow('assets/icons/telp_icon.svg', 'No. Telp', '+62 8xx-xxxx-xxxx'),
           _buildInfoRow('assets/icons/email_icon.svg', 'Email', 'nama@gmail.com', isLast: true),
         ],
+      ),
+    );
+  }
+
+  Widget _buildKontakDaruratCard(ProfileSayaController controller) {
+    final data = controller.kontakDarurat.value;
+    return CardContainer(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          if (data != null) _buildKontakDaruratRow(data, onTap: () => controller.openKontakDarurat(existing: data)),
+          _buildTambahKontakDaruratRow(controller),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKontakDaruratRow(Map<String, String> data, {required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: cardBorderColor))),
+        child: Row(
+          children: [
+            SvgPicture.asset('assets/icons/telp_icon.svg', width: 22, height: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: data['nama'] ?? '',
+                          style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black),
+                        ),
+                        TextSpan(
+                          text: '  (${data['hubungan'] ?? ''})',
+                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    data['nomorHp'] ?? '',
+                    style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black),
+                  ),
+                ],
+              ),
+            ),
+            SvgPicture.asset(
+              'assets/icons/kontak_darurat_chevron.svg',
+              width: 12,
+              height: 24,
+              colorFilter: const ColorFilter.mode(greyText, BlendMode.srcIn),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTambahKontakDaruratRow(ProfileSayaController controller) {
+    return GestureDetector(
+      onTap: () => controller.openKontakDarurat(),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SvgPicture.asset('assets/icons/add_circle_icon.svg', width: 20, height: 20),
+            const SizedBox(width: 6),
+            const Text('Tambah Kontak Darurat', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: primaryColor)),
+          ],
+        ),
       ),
     );
   }

@@ -1,7 +1,14 @@
 // Controller untuk langkah 3 pendaftaran akun: upload PAS foto.
 // Foto dipilih langsung dari file (JPG/PNG) memakai file_picker,
 // bukan dari kamera.
-
+//
+// Foto ini baru benar-benar diunggah & dicek deteksi wajahnya oleh
+// backend saat submit akhir di step 4 (lihat RegisterAkunPart4Controller).
+// Kalau backend menolak karena wajah tidak terdeteksi (atau error lain
+// terkait foto), part4 akan Get.back() ke sini dan mengisi [uploadError]
+// lewat [setUploadError] supaya keterangannya tampil inline di halaman
+// ini — sesuai desain Figma node 44:1055 — bukan lewat notifikasi di
+// halaman password.
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -12,6 +19,7 @@ class RegisterAkunUploadFotoController extends GetxController {
 
   final hasPhoto = false.obs;
   final photoPath = ''.obs;
+  final uploadError = ''.obs;
 
   Map<String, dynamic> _previousData = {};
 
@@ -24,8 +32,6 @@ class RegisterAkunUploadFotoController extends GetxController {
   }
 
   Future<void> handleUploadTap() async {
-    if (hasPhoto.value) return;
-
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       // Sesuai kontrak backend: jpg/png/webp diterima (201), format lain
@@ -38,12 +44,20 @@ class RegisterAkunUploadFotoController extends GetxController {
     if (path != null) {
       photoPath.value = path;
       hasPhoto.value = true;
+      uploadError.value = '';
     }
   }
 
   void handleHapus() {
     hasPhoto.value = false;
     photoPath.value = '';
+    uploadError.value = '';
+  }
+
+  /// Dipanggil dari RegisterAkunPart4Controller kalau backend menolak
+  /// foto saat submit (wajah tidak terdeteksi / error lain terkait foto).
+  void setUploadError(String message) {
+    uploadError.value = message;
   }
 
   void handleClose() {

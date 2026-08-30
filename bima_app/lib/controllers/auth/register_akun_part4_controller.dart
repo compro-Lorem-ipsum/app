@@ -10,12 +10,22 @@
 // https://cloud.google.com/storage/docs/xml-api/post-object-forms).
 // `object_uuid` hasil langkah 1 itu yang dikirim sebagai field `object_uuid`
 // saat register (bukan `avatar_path`, bukan juga `path`-nya).
+//
+// Kalau ada masalah dengan fotonya sendiri (gagal diunggah, atau backend
+// menolak lewat FACE_BAD_REQUEST karena wajah tidak terdeteksi), user
+// dikembalikan ke halaman Upload PAS Foto (step 3) dengan keterangan
+// error tampil inline di sana (lihat desain Figma node 44:1055) — bukan
+// lewat notifikasi/snackbar di halaman ini. Error lain yang tidak
+// berkaitan dengan foto (mis. NIP/email sudah terdaftar) tetap tampil di
+// halaman ini karena tidak mengharuskan user mengulang upload foto.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+
+import 'register_akun_upload_foto_controller.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
@@ -72,25 +82,24 @@ class RegisterAkunPart4Controller extends GetxController {
     );
   }
 
-  /// Backend membungkus error sebagai `{"error": {"code": ..., "message": ...}}`
-  /// (lihat contoh FACE_BAD_REQUEST). `code` dipakai untuk menerjemahkan
-  /// beberapa error yang pesan mentahnya kurang jelas buat pengguna;
-  /// `statusCode` dipakai sebagai fallback kalau code tidak dikenali.
+  /// Kembali ke halaman Upload PAS Foto (step 3, masih ada di bawah step
+  /// 4 pada stack navigasi sehingga controller-nya tetap hidup) dan isi
+  /// keterangan error di sana lewat [RegisterAkunUploadFotoController.setUploadError].
+  void _returnToUploadFotoWithError(String message) {
+    if (Get.isRegistered<RegisterAkunUploadFotoController>()) {
+      Get.find<RegisterAkunUploadFotoController>().setUploadError(message);
+    }
+    Get.back();
+  }
+
+  /// `statusCode`/`code` dipakai untuk menerjemahkan beberapa error yang
+  /// pesan mentahnya kurang jelas buat pengguna. Backend membungkusnya
+  /// sebagai `{"error": {"code": ..., "message": ...}}`.
   void _showRegisterError(int? statusCode, dynamic body) {
     final error = body is Map ? body['error'] : null;
-    final code = error is Map ? error['code']?.toString() : null;
     final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
 
-    switch (code) {
-      case 'FACE_BAD_REQUEST':
-        _showError('Foto Tidak Valid', 'Avatar harus menampilkan wajah dengan jelas. Silakan pilih foto lain.');
-        return;
-    }
-
     switch (statusCode) {
-      case 400:
-        _showError('Format Foto Tidak Didukung', rawMessage ?? 'Gunakan foto berformat JPG, PNG, atau WEBP.');
-        return;
       case 409:
         _showError('Sudah Terdaftar', rawMessage ?? 'Email atau NIP ini sudah terdaftar. Gunakan yang lain.');
         return;
@@ -162,7 +171,14 @@ class RegisterAkunPart4Controller extends GetxController {
     isSubmitting.value = true;
     try {
       submitStatus.value = 'Mengunggah foto...';
-      final avatarObjectUuid = await _uploadAvatarAndGetObjectUuid(photoPath);
+      final String avatarObjectUuid;
+      try {
+        avatarObjectUuid = await _uploadAvatarAndGetObjectUuid(photoPath);
+      } catch (e) {
+        debugPrint('RegisterAkunPart4Controller: gagal mengunggah foto: $e');
+        _returnToUploadFotoWithError('Gagal mengunggah foto. Periksa koneksi Anda dan coba lagi.');
+        return;
+      }
 
       submitStatus.value = 'Mendaftar...';
       final payload = {
@@ -192,6 +208,15 @@ class RegisterAkunPart4Controller extends GetxController {
           'password': password,
         };
         Get.offNamedUntil('/register-akun-part5', (route) => route.settings.name == '/login', arguments: data);
+        return;
+      }
+
+      final error = body is Map ? body['error'] : null;
+      final code = error is Map ? error['code']?.toString() : null;
+      if (code == 'FACE_BAD_REQUEST') {
+        _returnToUploadFotoWithError(
+          'Wajah tidak terdeteksi. Pastikan pencahayaan cukup terang dan wajah terlihat jelas tanpa masker atau kacamata gelap.',
+        );
         return;
       }
 
