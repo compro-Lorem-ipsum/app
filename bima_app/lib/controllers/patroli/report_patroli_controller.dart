@@ -1,7 +1,22 @@
 // Controller untuk halaman Laporan Patroli.
-// Personel diambil otomatis dari akun yang login (bukan dipilih manual),
-// sedangkan Pos & Status Lokasi tetap berupa pilihan. Mengurus juga
-// GPS, 4 slot foto, dan submit laporan (upload foto + simpan) ke API.
+//
+// Sebelumnya controller ini dibangun terhadap kontrak yang sudah usang:
+// - "Nama Personel" diambil dari GET /patroli/options lalu ambil item
+//   pertama sebagai asumsi "satpam yang login" — sekarang dibaca langsung
+//   dari sesi login (AuthService), tanpa fetch tambahan.
+// - Pos diambil dari GET /patroli/options/:satpamUuid — endpoint yang
+//   benar adalah GET /posts?type=jaga (satpam hanya melihat pos milik
+//   client tempatnya ditugaskan).
+// - Upload foto memakai PUT mentah ke "upload_urls" batch — kontrak yang
+//   didokumentasikan adalah upload 2-langkah PER FOTO (POST
+//   /patrols/upload-url -> object_uuid, lalu POST multipart ke GCS,
+//   fields dulu baru file — sama seperti upload avatar/selfie absensi),
+//   dan submit akhir mengirim `object_uuids` (bukan `filenames`).
+// - Body submit memakai `satpam_uuid`/`status_lokasi`/`keterangan` yang
+//   tidak ada di kontrak — yang benar `pos_uuid`, `status` (persis
+//   `aman`/`tidak aman`), `description`.
+// - Error dibaca dari `error.code` (NOT_ON_DUTY, POS_NOT_JAGA,
+//   OUTSIDE_POS_RADIUS), bukan lagi menebak dari potongan teks pesan.
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -9,30 +24,30 @@ import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+
+import '../../services/auth_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
 class ReportPatroliController extends GetxController {
+  static const _statusToApi = {'Aman': 'aman', 'Tidak Aman': 'tidak aman'};
+
   // ===== STATE =====
-  var listSatpam = <dynamic>[].obs;
   var listPos = <dynamic>[].obs;
 
-  var selectedSatpam = ''.obs;
-  // Nama personel yang sedang login, ditampilkan langsung (bukan pilihan manual).
+  // Nama personel yang sedang login, dibaca dari sesi (bukan fetch/pilihan manual).
   var personnelName = ''.obs;
   var selectedPos = ''.obs;
   var status = ''.obs;
   var notes = ''.obs;
 
-  // Text controller for the "Keterangan" field so it can use the shared
-  // AppTextField widget. Purely presentational plumbing: it just mirrors
-  // its text into the existing `notes` Rx used by submitReport's payload.
   final notesController = TextEditingController();
 
   var latitude = 0.0.obs;
   var longitude = 0.0.obs;
 
-  // base64 image (4 foto)
+  // Path file lokal (4 foto) — bukan base64, cukup path untuk MultipartFile.
   var photos = List<String>.filled(4, "").obs;
 
   var isLoading = false.obs;
@@ -44,7 +59,8 @@ class ReportPatroliController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    fetchSatpam();
+    _loadPersonnel();
+    fetchPos();
     getGPS();
     notesController.addListener(() {
       notes.value = notesController.text;
@@ -55,6 +71,20 @@ class ReportPatroliController extends GetxController {
   void onClose() {
     notesController.dispose();
     super.onClose();
+  }
+
+  Future<Map<String, String>?> _authHeaders({bool json = false}) async {
+    final token = await AuthService().getAccessToken();
+    if (token == null || token.isEmpty) return json ? {'Content-Type': 'application/json'} : null;
+    return {
+      'Authorization': 'Bearer $token',
+      if (json) 'Content-Type': 'application/json',
+    };
+  }
+
+  Future<void> _loadPersonnel() async {
+    final user = await AuthService().getUser();
+    personnelName.value = (user?['nama'] as String?) ?? '';
   }
 
   // ===== GPS =====
@@ -88,64 +118,83 @@ class ReportPatroliController extends GetxController {
       },
     );
 
-    // Jika kamera mengembalikan path foto
     if (result != null && result is String) {
       photos[index] = result;
-      photos.refresh(); 
+      photos.refresh();
     }
   }
 
-  // ===== API OPTIONS =====
-  Future<void> fetchSatpam() async {
-    final res = await GetConnect().get("$BASE_API_URL/patroli/options");
-    if (res.body?['data'] != null) {
-      listSatpam.value = res.body['data'];
-    }
-
-    // Tidak ada lagi pemilihan personel manual: pakai personel yang sedang
-    // login (data pertama dari API) dan langsung ambil daftar Pos-nya.
-    if (listSatpam.isNotEmpty) {
-      final current = listSatpam.first;
-      selectedSatpam.value = current['uuid'] ?? '';
-      personnelName.value = current['nama'] ?? '';
-      if (selectedSatpam.value.isNotEmpty) {
-        fetchPos(selectedSatpam.value);
-      }
-    }
-  }
-
-  Future<void> fetchPos(String satpamUuid) async {
+  // ===== POS (GET /posts?type=jaga) =====
+  Future<void> fetchPos() async {
     selectedPos.value = '';
     listPos.clear();
 
-    final res =
-        await GetConnect().get("$BASE_API_URL/patroli/options/$satpamUuid");
-    if (res.body?['data'] != null) {
-      listPos.value = res.body['data'];
+    try {
+      final res = await GetConnect().get(
+        '$BASE_API_URL/posts',
+        query: {'type': 'jaga'},
+        headers: await _authHeaders(),
+      );
+      final data = res.body is Map ? res.body['data'] : null;
+      if (data is List) {
+        listPos.value = data;
+      }
+    } catch (e) {
+      debugPrint('ReportPatroliController: gagal ambil daftar pos: $e');
     }
   }
 
   // ===== PHOTO RESULT FROM CAMERA =====
-  void setPhoto(int index, String base64) {
-    photos[index] = base64;
+  void setPhoto(int index, String path) {
+    photos[index] = path;
     photos.refresh();
   }
 
-  // ===== SUBMIT (SAMA DENGAN VITE) =====
+  /// Upload satu foto lewat kontrak 2-langkah: POST /patrols/upload-url
+  /// untuk reservasi object, lalu POST multipart ke GCS (fields dulu,
+  /// file terakhir). Mengembalikan object_uuid untuk disertakan di body
+  /// POST /patrols.
+  Future<String> _uploadPhotoAndGetObjectUuid(String path) async {
+    final linkRes = await GetConnect().post(
+      '$BASE_API_URL/patrols/upload-url',
+      {'ext': 'jpg'},
+      headers: await _authHeaders(json: true),
+    );
+    final linkOk = linkRes.statusCode != null && linkRes.statusCode! >= 200 && linkRes.statusCode! < 300;
+    final linkData = linkRes.body is Map ? linkRes.body['data'] as Map<String, dynamic>? : null;
+    if (!linkOk || linkData == null) {
+      throw Exception('Gagal mendapatkan link upload foto.');
+    }
+
+    final objectUuid = linkData['object_uuid'] as String;
+    final uploadUrl = linkData['upload_url'] as String;
+    final fields = Map<String, dynamic>.from(linkData['fields'] as Map);
+    final contentType = (linkData['content_type'] as String?) ?? fields['Content-Type'] as String? ?? 'image/jpeg';
+
+    final uploadRequest = http.MultipartRequest('POST', Uri.parse(uploadUrl))
+      ..fields.addAll(fields.map((key, value) => MapEntry(key, value.toString())))
+      ..files.add(await http.MultipartFile.fromPath('file', path, contentType: MediaType.parse(contentType)));
+
+    final uploadResponse = await uploadRequest.send();
+    if (uploadResponse.statusCode < 200 || uploadResponse.statusCode >= 300) {
+      throw Exception('Gagal mengunggah foto (status ${uploadResponse.statusCode}).');
+    }
+
+    return objectUuid;
+  }
+
+  // ===== SUBMIT =====
   Future<void> submitReport() async {
     alertMessage.value = '';
     resultData.value = null;
 
-    // VALIDASI
     if (photos.any((p) => p.isEmpty)) {
       alertMessage.value = "Harap lengkapi 4 foto!";
       showModal();
       return;
     }
 
-    if (selectedSatpam.value.isEmpty ||
-        selectedPos.value.isEmpty ||
-        status.value.isEmpty) {
+    if (selectedPos.value.isEmpty || status.value.isEmpty) {
       alertMessage.value = "Harap lengkapi semua pilihan!";
       showModal();
       return;
@@ -157,82 +206,80 @@ class ReportPatroliController extends GetxController {
       return;
     }
 
+    final statusApi = _statusToApi[status.value];
+    if (statusApi == null) {
+      alertMessage.value = "Status lokasi tidak valid.";
+      showModal();
+      return;
+    }
+
     isLoading.value = true;
 
     try {
-      loadingMessage.value = "1/3 Meminta Slot Upload...";
-
-      // === STEP 1: GET UPLOAD URL ===
-      final urlRes =
-          await GetConnect().get("$BASE_API_URL/patroli/upload-urls");
-
-      if (urlRes.body?['data'] == null) {
-        throw "Gagal mendapatkan upload URL";
-      }
-
-      final uploadUrls = urlRes.body['data']['upload_urls'];
-      final filenames = urlRes.body['data']['filenames'];
-
-      loadingMessage.value = "2/3 Mengunggah Foto...";
-
-      // === STEP 2: UPLOAD FOTO ===
-      for (int i = 0; i < photos.length; i++) {
+      loadingMessage.value = "Mengunggah foto (1/4)...";
+      final objectUuids = <String>[];
+      for (var i = 0; i < photos.length; i++) {
         final file = File(photos[i]);
-
         if (!await file.exists()) {
-          throw "Foto ke-${i + 1} tidak ditemukan";
+          throw Exception("Foto ke-${i + 1} tidak ditemukan");
         }
-
-        final bytes = await file.readAsBytes();
-
-        final uploadRes = await http.put(
-          Uri.parse(uploadUrls[i]),
-          headers: {
-            "Content-Type": "image/jpeg",
-          },
-          body: bytes,
-        );
-
-        if (uploadRes.statusCode != 200) {
-          throw "Gagal upload foto ke-${i + 1}";
-        }
-
+        loadingMessage.value = "Mengunggah foto (${i + 1}/4)...";
+        objectUuids.add(await _uploadPhotoAndGetObjectUuid(photos[i]));
       }
 
-      loadingMessage.value = "3/3 Menyimpan Laporan...";
+      loadingMessage.value = "Menyimpan laporan...";
 
-      // === STEP 3: SAVE REPORT ===
       final payload = {
-        "satpam_uuid": selectedSatpam.value,
         "pos_uuid": selectedPos.value,
         "lat": latitude.value,
         "lng": longitude.value,
-        "status_lokasi": status.value,
-        "keterangan": notes.value.isEmpty 
-            ? "Situasi aman terkendali." 
-            : notes.value,
-        "filenames": filenames,
+        "status": statusApi,
+        "description": notes.value.isEmpty ? "Situasi aman terkendali." : notes.value,
+        "object_uuids": objectUuids,
       };
 
       final reportRes = await GetConnect().post(
-        "$BASE_API_URL/patroli",
+        "$BASE_API_URL/patrols",
         payload,
-        headers: {"Content-Type": "application/json"},
+        headers: await _authHeaders(json: true),
       );
 
-      resultData.value = reportRes.body;
+      final ok = reportRes.statusCode != null && reportRes.statusCode! >= 200 && reportRes.statusCode! < 300;
+      if (ok) {
+        resultData.value = reportRes.body is Map ? Map<String, dynamic>.from(reportRes.body as Map) : {};
+        showModal();
+        return;
+      }
 
-      print("STATUS CODE: ${reportRes.statusCode}");
-      print("BODY: ${reportRes.body}");
-
-
+      _handleSubmitError(reportRes.body);
       showModal();
     } catch (e) {
-      alertMessage.value = e.toString();
+      debugPrint('ReportPatroliController: gagal submit laporan: $e');
+      alertMessage.value = "Tidak dapat terhubung ke server. Periksa koneksi Anda dan coba lagi.";
       showModal();
     } finally {
       isLoading.value = false;
       loadingMessage.value = '';
+    }
+  }
+
+  void _handleSubmitError(dynamic body) {
+    final error = body is Map ? body['error'] : null;
+    final code = error is Map ? error['code']?.toString() : null;
+    final rawMessage = (error is Map ? error['message'] : null)?.toString();
+
+    switch (code) {
+      case 'NOT_ON_DUTY':
+        alertMessage.value = 'Anda belum check-in. Lakukan check-in terlebih dahulu sebelum melapor patroli.';
+        return;
+      case 'POS_NOT_JAGA':
+        alertMessage.value = 'Pos yang dipilih bukan pos jaga.';
+        return;
+      case 'OUTSIDE_POS_RADIUS':
+        alertMessage.value = 'Anda berada di luar radius pos ini.';
+        return;
+      default:
+        alertMessage.value = rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.';
     }
   }
 
@@ -259,23 +306,6 @@ class ReportPatroliController extends GetxController {
     const orange = Color(0xFFF59E0B);
     const orangeDark = Color(0xFFB45309);
 
-    final isLocationError =
-      resultData.value?['message']?.contains("Jarak tidak memasuki radius Pos") ?? false;
-    
-    final isScheduleError = 
-      resultData.value?['message']?.contains("Tidak ada jadwal untuk hari ini") ?? false;
-
-    if (isScheduleError) {
-      alertMessage.value = 'Tidak ada jadwal untuk hari ini';
-    }
-
-    if (isLocationError) {
-      alertMessage.value = 'Jarak tidak memasuki radius Pos';
-    }
-
-    // ================================
-    // 🔶 VALIDATION ERROR (ORANGE)
-    // ================================
     if (alertMessage.value.isNotEmpty) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -295,9 +325,9 @@ class ReportPatroliController extends GetxController {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Color(0xFFFFF7ED),
+              color: const Color(0xFFFFF7ED),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Color(0xFFFFEDD5)),
+              border: Border.all(color: const Color(0xFFFFEDD5)),
             ),
             child: Text(
               alertMessage.value,
@@ -330,9 +360,6 @@ class ReportPatroliController extends GetxController {
       );
     }
 
-    // ================================
-    // 🔵 SUCCESS
-    // ================================
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
