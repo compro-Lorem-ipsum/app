@@ -45,3 +45,7 @@ app.*.map.json
 /android/app/release
 
 .env
+
+# Konfigurasi Firebase per-project (API key production) - lihat catatan
+# di android/app/build.gradle.kts, taruh manual sebelum build.
+/android/app/google-services.json
