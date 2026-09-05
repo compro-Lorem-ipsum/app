@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/panic_alert_polling_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
@@ -120,6 +121,10 @@ class LoginController extends GetxController {
           user: Map<String, dynamic>.from(user),
           rememberMe: rememberMe.value,
         );
+
+        // Mulai polling Panic Alert (lihat panic_alert_polling_service.dart)
+        // — dihentikan lagi saat logout (ProfileSayaController.logout).
+        PanicAlertPollingService().start();
 
         Get.offAllNamed('/');
         return;

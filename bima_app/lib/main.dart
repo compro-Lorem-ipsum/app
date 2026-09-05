@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'services/auth_service.dart';
+import 'services/panic_alert_polling_service.dart';
 
 // Import views
 import 'views/auth/login_view.dart';
@@ -80,6 +81,14 @@ Future<void> main() async {
     // di sisi backend ketahuan walau klaim exp JWT-nya belum lewat.
     // Offline-tolerant — lihat AuthService.validateSessionWithServer().
     isLoggedIn = await AuthService().validateSessionWithServer();
+  }
+
+  // Mulai polling Panic Alert (GET /alerts/active) kalau sudah ada sesi
+  // login tersimpan sejak cold-start — lihat panic_alert_polling_service.dart
+  // untuk detail kenapa ini polling, bukan push. Untuk login BARU (bukan
+  // sesi tersimpan), start() dipanggil dari LoginController.handleMasuk.
+  if (isLoggedIn) {
+    PanicAlertPollingService().start();
   }
 
   runApp(MyApp(initialRoute: isLoggedIn ? '/' : '/login'));

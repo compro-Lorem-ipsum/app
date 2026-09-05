@@ -65,5 +65,17 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Wajib untuk url_launcher (Android 11+ package visibility) —
+             tanpa ini launchUrl() ke http/https selalu gagal (canLaunchUrl
+             mengembalikan false) meski ada browser terpasang. Dipakai untuk
+             membuka dokumen repositori (rep_doks_controller.dart). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
+        </intent>
     </queries>
 </manifest>
