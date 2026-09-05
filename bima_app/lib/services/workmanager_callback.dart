@@ -23,6 +23,8 @@
 // heartbeat panic alert yang gagal cukup dilewati, dicoba lagi di siklus
 // berikutnya.
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -132,13 +134,32 @@ Future<void> _runPanicAlertHeartbeat() async {
       final satpam = alert['satpam'] is Map ? Map<String, dynamic>.from(alert['satpam'] as Map) : null;
       final client = alert['client'] is Map ? Map<String, dynamic>.from(alert['client'] as Map) : null;
       final satpamName = (satpam?['nama'] ?? alert['nama'] ?? 'Satpam').toString();
+      final nip = (satpam?['nip'] ?? alert['nip'] ?? '').toString();
       final mitra = (client?['nama'] ?? alert['mitra'] ?? '').toString();
       final uuid = (alert['uuid'] ?? '').toString();
+      final lat = alert['lat'];
+      final lng = alert['lng'];
+      final createdAt = DateTime.tryParse((alert['created_at'] ?? '').toString())?.toLocal();
+      final time = createdAt != null
+          ? '${createdAt.day}/${createdAt.month}/${createdAt.year} · ${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}'
+          : '-';
+
+      // Payload dibaca oleh PanicAlertNotificationService.navigateFromPayload
+      // saat notifikasi ini di-tap — lihat catatan di file itu untuk kenapa
+      // ini harus lewat payload string, bukan state Dart bersama.
+      final payload = jsonEncode({
+        'satpamName': satpamName,
+        'nip': nip,
+        'mitra': mitra,
+        'time': time,
+        'latitude': lat,
+        'longitude': lng,
+      });
 
       await notifications.show(
         uuid.hashCode,
         'Panic Alert Masuk',
-        '$satpamName mengirim panic alert${mitra.isNotEmpty ? ' di $mitra' : ''}. Buka app untuk lihat lokasi.',
+        '$satpamName mengirim panic alert${mitra.isNotEmpty ? ' di $mitra' : ''}. Ketuk untuk lihat lokasi.',
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'bima_panic_alert',
@@ -148,6 +169,7 @@ Future<void> _runPanicAlertHeartbeat() async {
             priority: Priority.high,
           ),
         ),
+        payload: payload,
       );
     }
   } catch (e) {

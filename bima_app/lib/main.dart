@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'services/auth_service.dart';
+import 'services/panic_alert_notification_service.dart';
 import 'services/panic_alert_polling_service.dart';
 
 // Import views
@@ -32,6 +33,7 @@ import 'views/pengajuan/buat_pengajuan_view.dart';
 import 'views/pengumuman/pengumuman_view.dart';
 import 'views/pesan/pesan_view.dart';
 import 'views/dokumen/rep_doks_view.dart';
+import 'views/dokumen/document_viewer_view.dart';
 import 'views/rekan_kerja/rekan_kerja_view.dart';
 import 'views/aktifitas/aktifitas_saya_view.dart';
 import 'views/profile/profile_saya_view.dart';
@@ -57,6 +59,7 @@ import 'controllers/pengajuan/pengajuan_controller.dart';
 import 'controllers/pengumuman/pengumuman_controller.dart';
 import 'controllers/pesan/pesan_controller.dart';
 import 'controllers/dokumen/rep_doks_controller.dart';
+import 'controllers/dokumen/document_viewer_controller.dart';
 import 'controllers/rekan_kerja/rekan_kerja_controller.dart';
 import 'controllers/aktifitas/aktifitas_saya_controller.dart';
 import 'controllers/profile/profile_saya_controller.dart';
@@ -91,20 +94,44 @@ Future<void> main() async {
     await PanicAlertPollingService().start();
   }
 
-  runApp(MyApp(initialRoute: isLoggedIn ? '/' : '/login'));
+  // Daftarkan listener tap notifikasi Panic Alert (untuk app yang masih
+  // hidup) DAN cek apakah app kali ini diluncurkan lewat tap notifikasi
+  // saat app sebelumnya tertutup total — kalau iya, arahkan ke halaman
+  // lokasi setelah frame pertama selesai (lihat _MyAppState.initState).
+  await PanicAlertNotificationService().init();
+  final pendingPayload = isLoggedIn ? await PanicAlertNotificationService().getLaunchPayload() : null;
+
+  runApp(MyApp(initialRoute: isLoggedIn ? '/' : '/login', pendingNotificationPayload: pendingPayload));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final String initialRoute;
+  final String? pendingNotificationPayload;
 
-  const MyApp({super.key, required this.initialRoute});
+  const MyApp({super.key, required this.initialRoute, this.pendingNotificationPayload});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    final payload = widget.pendingNotificationPayload;
+    if (payload != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        PanicAlertNotificationService.navigateFromPayload(payload);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(fontFamily: 'Poppins'),
-      initialRoute: initialRoute,
+      initialRoute: widget.initialRoute,
       smartManagement: SmartManagement.full,
       // Supaya tombol back Android meminimalkan (bukan menutup) app selama
       // foreground service GPS tracking aktif — lihat tracking_service.dart.
@@ -250,6 +277,14 @@ class MyApp extends StatelessWidget {
           page: () => const RepDoksView(),
           binding: BindingsBuilder(() {
             Get.lazyPut(() => RepDoksController());
+          }),
+        ),
+
+        GetPage(
+          name: '/document-viewer',
+          page: () => const DocumentViewerView(),
+          binding: BindingsBuilder(() {
+            Get.lazyPut(() => DocumentViewerController());
           }),
         ),
 

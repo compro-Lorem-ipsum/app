@@ -8,14 +8,12 @@
 // yang masih PENDING ditandai lewat [DokumenItem.isReady], bukan
 // disembunyikan begitu saja.
 //
-// Membuka dokumen lewat `view_url` di browser/viewer eksternal device
-// (lewat url_launcher) — proyek ini belum punya viewer PDF/gambar in-app,
-// jadi ini pendekatan paling sederhana yang tetap benar-benar berfungsi.
+// Membuka dokumen lewat viewer in-app (DocumentViewerView, PDF via pdfx /
+// gambar via Image.network) — lihat document_viewer_controller.dart.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 
@@ -153,29 +151,18 @@ class RepDoksController extends GetxController {
     );
   }
 
-  Future<void> openDocument(DokumenItem item) async {
+  void openDocument(DokumenItem item) {
     if (!item.isReady) {
       _showMessage('Dokumen Belum Siap', 'Dokumen ini masih diproses server, coba lagi sebentar.');
       return;
     }
 
     final url = item.viewUrl;
-    if (url == null) return;
-
-    final uri = Uri.tryParse(url);
-    if (uri == null) {
+    if (url == null || Uri.tryParse(url) == null) {
       _showMessage('Gagal Membuka', 'Tautan dokumen tidak valid.');
       return;
     }
 
-    try {
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched) {
-        _showMessage('Gagal Membuka', 'Tidak ada aplikasi yang bisa membuka dokumen ini.');
-      }
-    } catch (e) {
-      debugPrint('RepDoksController: gagal membuka dokumen: $e');
-      _showMessage('Gagal Membuka', 'Terjadi kesalahan saat membuka dokumen.');
-    }
+    Get.toNamed('/document-viewer', arguments: {'url': url, 'nama': item.nama});
   }
 }
