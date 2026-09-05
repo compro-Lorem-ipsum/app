@@ -1,7 +1,8 @@
 // Merekam posisi GPS satpam selama masa "bertugas" dan menyimpannya secara
 // lokal (lihat queue_service.dart), lalu mengirim semuanya sekaligus
-// (batch) tepat sebelum check-out — bukan real-time — karena rute baru
-// diproses backend setelah check-out (lihat dokumentasi GPS Tracking).
+// (batch, sebagai satu encoded polyline) tepat sebelum check-out — bukan
+// real-time — karena rute baru diproses backend setelah check-out (lihat
+// dokumentasi GPS Tracking).
 //
 // Empat lapis ketahanan: (1) GPS stream sebagai sumber utama, (2) timer
 // fallback yang memakai getLastKnownPosition kalau stream diam, dan
@@ -11,12 +12,17 @@
 // (4) WorkManager (lihat workmanager_callback.dart) sebagai heartbeat
 // tambahan kalau OEM tertentu tetap membunuh foreground service ini.
 //
-// MODE FALLBACK: endpoint `/satpam-app/:uuid/tracking/batch` belum
-// tersedia di backend saat ini. Kalau pengiriman gagal karena backend
-// tidak terjangkau, titik TETAP tersimpan aman di antrian lokal (tidak
-// hilang, tidak ditandai synced) dan proses check-out tetap boleh lanjut
-// (dengan flag gps_incomplete=true) supaya bagian FE tetap bisa dites
-// tanpa perlu backend menyala.
+// Kontrak backend (POST /attendance/tracking) menerima segmen rute sebagai
+// SATU string `polyline` (format Google Encoded Polyline Algorithm), bukan
+// array titik mentah — lihat _encodePolyline di bawah. Endpoint ini
+// mensyaratkan sesi absensi masih terbuka (409 NO_ACTIVE_SESSION kalau
+// tidak ada check-in aktif), jadi flush hanya berarti dilakukan SEBELUM
+// check-out selesai, bukan sesudahnya.
+//
+// MODE FALLBACK: kalau pengiriman gagal (backend tidak terjangkau, atau
+// sesi absensi ternyata sudah tidak terbuka), titik TETAP tersimpan aman
+// di antrian lokal (tidak ditandai synced) dan proses check-out tetap
+// boleh lanjut — lihat catatan MODE FALLBACK di stopTracking().
 
 import 'dart:async';
 
@@ -28,6 +34,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'auth_service.dart';
 import 'gps_task_handler.dart';
 import 'queue_service.dart';
 import 'tracking_prefs_keys.dart';
@@ -165,36 +172,41 @@ class TrackingService {
     }
   }
 
-  /// Kirim semua titik yang masih tertunda ke server sekaligus (batch),
-  /// dipanggil tepat sebelum submit check-out. `true` = flush berhasil
-  /// (atau memang tidak ada sisa), `false` = masih ada titik gagal
-  /// terkirim (mis. backend belum tersedia) — pemanggil tetap boleh lanjut
-  /// check-out dengan menandai `gps_incomplete: true`.
-  Future<bool> flushForCheckout({required String satpamUuid}) async {
-    final ok = await _flushOnce(satpamUuid: satpamUuid);
+  /// Kirim semua titik yang masih tertunda ke server sekaligus (sebagai
+  /// satu polyline), dipanggil tepat SEBELUM submit check-out (selagi
+  /// sesi absensi masih terbuka). `true` = flush berhasil (atau memang
+  /// tidak ada sisa), `false` = masih ada titik gagal terkirim (mis.
+  /// backend tidak terjangkau) — pemanggil tetap boleh lanjut check-out;
+  /// titik yang gagal tetap tersimpan lokal.
+  Future<bool> flushForCheckout() async {
+    final ok = await _flushOnce();
     if (ok) return true;
     // Sesuai dokumentasi: kalau gagal, di-retry sekali secara inline
     // sebelum menyerah dan membiarkan checkout tetap lanjut.
-    return _flushOnce(satpamUuid: satpamUuid);
+    return _flushOnce();
   }
 
-  Future<bool> _flushOnce({required String satpamUuid}) async {
+  Future<bool> _flushOnce() async {
     final pending = await QueueService().getPending();
     if (pending.isEmpty) return true;
 
     try {
+      final token = await AuthService().getAccessToken();
+      if (token == null || token.isEmpty) {
+        debugPrint('TrackingService: tidak ada sesi login tersimpan, lewati flush.');
+        return false;
+      }
+
       final baseUrl = dotenv.env['BASE_API_URL'];
+      final polyline = _encodePolyline(pending);
+
       final response = await GetConnect()
           .post(
-            '$baseUrl/satpam-app/$satpamUuid/tracking/batch',
-            {
-              'points': pending
-                  .map((p) => {
-                        'lat': p.lat,
-                        'lng': p.lng,
-                        'recorded_at': p.recordedAt.toIso8601String(),
-                      })
-                  .toList(),
+            '$baseUrl/attendance/tracking',
+            {'polyline': polyline},
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
             },
           )
           .timeout(const Duration(seconds: 10));
@@ -204,26 +216,57 @@ class TrackingService {
         await QueueService().markSynced(pending.map((p) => p.id!).toList());
         return true;
       }
-      debugPrint('TrackingService: flush ditolak server (status ${response.statusCode})');
+      debugPrint('TrackingService: flush ditolak server (status ${response.statusCode}, body ${response.body})');
       return false;
     } catch (e) {
-      // MODE FALLBACK (backend belum tersedia): titik tetap aman di
-      // antrian lokal, tapi karena belum ada backend untuk benar-benar
-      // menyimpannya, cache ini akan dibuang begitu saja di stopTracking()
-      // begitu shift ini selesai (lihat catatan di sana).
+      // MODE FALLBACK (backend tidak terjangkau, dsb.): titik tetap aman
+      // di antrian lokal, tapi karena tidak sempat tersimpan di server,
+      // cache ini akan dibuang begitu saja di stopTracking() begitu shift
+      // ini selesai (lihat catatan di sana).
       debugPrint('TrackingService: flush gagal, mode offline/testing: $e');
       return false;
     }
   }
 
+  /// Rangkai seluruh titik tertunda (urut waktu) menjadi satu string
+  /// polyline ter-encode — format Google Encoded Polyline Algorithm,
+  /// presisi 5 desimal, sesuai kontrak `POST /attendance/tracking`.
+  String _encodePolyline(List<GpsPoint> points) {
+    final buffer = StringBuffer();
+    var lastLat = 0;
+    var lastLng = 0;
+
+    for (final point in points) {
+      final lat = (point.lat * 1e5).round();
+      final lng = (point.lng * 1e5).round();
+      _encodePolylineValue(lat - lastLat, buffer);
+      _encodePolylineValue(lng - lastLng, buffer);
+      lastLat = lat;
+      lastLng = lng;
+    }
+
+    return buffer.toString();
+  }
+
+  void _encodePolylineValue(int value, StringBuffer buffer) {
+    var v = value < 0 ? ~(value << 1) : (value << 1);
+    while (v >= 0x20) {
+      buffer.writeCharCode((0x20 | (v & 0x1f)) + 63);
+      v >>= 5;
+    }
+    buffer.writeCharCode(v + 63);
+  }
+
   /// Kirim sisa antrian dari shift SEBELUMNYA yang belum ter-flush,
   /// dipanggil fire-and-forget dari startTracking() supaya tidak menunda
-  /// mulainya tracking shift baru.
+  /// mulainya tracking shift baru. Kalau shift sebelumnya sudah check-out,
+  /// sesi absensinya sudah tertutup di server — percobaan ini wajar gagal
+  /// dengan `NO_ACTIVE_SESSION` dan titiknya tetap dibuang di stopTracking().
   Future<void> flushLeftoverInBackground() async {
     final prefs = await SharedPreferences.getInstance();
-    final satpamUuid = prefs.getString(_prefKeyAbsensiUuid);
-    if (satpamUuid == null) return;
-    unawaited(_flushOnce(satpamUuid: satpamUuid));
+    final absensiUuid = prefs.getString(_prefKeyAbsensiUuid);
+    if (absensiUuid == null) return;
+    unawaited(_flushOnce());
   }
 
   /// Sudahi tracking untuk shift ini (dipanggil setelah check-out sukses).

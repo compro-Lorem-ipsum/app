@@ -158,13 +158,15 @@ class AbsenCheckinController extends GetxController {
 
     isSubmitting.value = true;
     try {
-      // Saat check-out: hentikan capture & ambil titik penutup lokal
-      // sebelum submit. Sinkronisasi titik GPS itu sendiri lewat endpoint
-      // terpisah (POST /attendance/tracking) yang belum diselaraskan di
-      // TrackingService — di luar cakupan perubahan ini.
+      // Saat check-out: hentikan capture, ambil titik penutup, lalu kirim
+      // semua titik yang masih tertunda sebagai satu polyline (POST
+      // /attendance/tracking) SEBELUM submit check-out — endpoint itu
+      // mensyaratkan sesi absensi masih terbuka. Kegagalan flush tidak
+      // menghentikan check-out; titik yang gagal tetap tersimpan lokal.
       if (!isCheckIn) {
         await TrackingService().pauseCapture();
         await TrackingService().captureFinalPoint();
+        await TrackingService().flushForCheckout();
       }
 
       final token = await AuthService().getAccessToken();
