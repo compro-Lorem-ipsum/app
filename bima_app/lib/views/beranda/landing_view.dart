@@ -61,15 +61,11 @@ class LandingView extends StatelessWidget {
                     const SizedBox(height: 24),
                     SectionHeader(title: 'Pesan', onSeeAll: () => Get.toNamed('/pesan')),
                     const SizedBox(height: 12),
-                    _buildMessageCard(title: 'Briefing Singkat', time: '22:01', sender: 'Nama Mitra', body: 'Mohon perhatikan jadwal patroli pada shift ini, lakukan ronda setiap 2 jam dan laporkan kondisi lingkungan melalui aplikasi. Pastikan semua pintu terkunci sebelum 23:00.', onTap: () => Get.toNamed('/pesan')),
-                    const SizedBox(height: 12),
-                    _buildMessageCard(title: 'Judul Pesan', time: '17:50', sender: 'Nama Mitra', body: 'Isi Pesan', onTap: () => Get.toNamed('/pesan')),
+                    Obx(() => _buildPesanPreview(controller)),
                     const SizedBox(height: 24),
                     SectionHeader(title: 'Pengumuman', onSeeAll: () => Get.toNamed('/pengumuman')),
                     const SizedBox(height: 12),
-                    _buildMessageCard(title: 'Nama Pengumuman', time: '20 Jun · 07:00', sender: 'Admin BGS', body: 'Isi Pengumuman', onTap: () => Get.toNamed('/pengumuman')),
-                    const SizedBox(height: 12),
-                    _buildMessageCard(title: 'Apel Pagi', time: '20 Jun · 07:00', sender: 'Admin BGS', body: 'Mohon hadir di lapangan kantor pusat pada 20 juni pukul 06:30 untuk melaksanakan apel pagi.', onTap: () => Get.toNamed('/pengumuman')),
+                    Obx(() => _buildPengumumanPreview(controller)),
                   ],
                 ),
               ),
@@ -266,7 +262,63 @@ class LandingView extends StatelessWidget {
     );
   }
 
-  Widget _buildMessageCard({required String title, required String time, required String sender, required String body, required VoidCallback onTap}) {
+  Widget _buildPesanPreview(LandingController controller) {
+    final pesanController = controller.pesanController;
+    if (pesanController.isLoading.value && pesanController.messages.isEmpty) {
+      return const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 12), child: CircularProgressIndicator(color: AppColors.primary)));
+    }
+    if (pesanController.messages.isEmpty) {
+      return _buildEmptyPreview('Belum ada pesan.');
+    }
+    final items = pesanController.messages.take(2).toList();
+    return Column(
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _buildPreviewCard(
+            title: items[i].title,
+            time: items[i].time,
+            body: items[i].preview,
+            unread: !items[i].isRead,
+            onTap: () => pesanController.openMessage(items[i]),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildPengumumanPreview(LandingController controller) {
+    final pengumumanController = controller.pengumumanController;
+    if (pengumumanController.isLoading.value && pengumumanController.announcements.isEmpty) {
+      return const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 12), child: CircularProgressIndicator(color: AppColors.primary)));
+    }
+    if (pengumumanController.announcements.isEmpty) {
+      return _buildEmptyPreview('Belum ada pengumuman.');
+    }
+    final items = pengumumanController.announcements.take(2).toList();
+    return Column(
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _buildPreviewCard(
+            title: (items[i]['title'] ?? '').toString(),
+            time: '${items[i]['date']} · ${items[i]['time']}',
+            body: (items[i]['summary'] ?? '').toString(),
+            unread: items[i]['unread'] == true,
+            onTap: () => pengumumanController.openAnnouncement(items[i]),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildEmptyPreview(String message) {
+    return CardContainer(
+      child: Text(message, style: AppText.regular.copyWith(fontSize: 12, color: AppColors.disabled)),
+    );
+  }
+
+  Widget _buildPreviewCard({required String title, required String time, required String body, required bool unread, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: CardContainer(
@@ -276,16 +328,26 @@ class LandingView extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: AppText.semiBold.copyWith(fontSize: 14, color: Colors.black)),
+                Expanded(
+                  child: Row(
+                    children: [
+                      if (unread) ...[
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Expanded(child: Text(title, style: AppText.semiBold.copyWith(fontSize: 14, color: Colors.black), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    ],
+                  ),
+                ),
                 Text(time, style: AppText.regular.copyWith(fontSize: 12, color: AppColors.disabled)),
               ],
             ),
             const SizedBox(height: 6),
-            Text(body, style: AppText.regular.copyWith(fontSize: 12, color: AppColors.greyText)),
-            const SizedBox(height: 10),
-            Container(height: 1, color: AppColors.cardBorder),
-            const SizedBox(height: 8),
-            Text(sender, style: AppText.medium.copyWith(fontSize: 12, color: AppColors.primary)),
+            Text(body, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppText.regular.copyWith(fontSize: 12, color: AppColors.greyText)),
           ],
         ),
       ),

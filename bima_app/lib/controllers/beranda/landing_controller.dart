@@ -4,12 +4,21 @@
 // jadi Check-out setelah check-in berhasil; identitas satpam untuk kartu
 // sapaan header (SatpamProfileService); dan ringkasan jam kerja untuk
 // kartu ringkasan shift & Status Hari ini (AttendanceSummaryService).
+//
+// Preview "Pesan" & "Pengumuman" memakai instance PesanController /
+// PengumumanController yang SAMA dengan halaman masing-masing (bukan
+// fetch terpisah) — dulu kartu ini teks statis (placeholder), sehingga
+// tap tidak menampilkan apa pun dan status baca tidak pernah berubah.
+// Dengan berbagi instance yang sama, status baca yang diubah dari sini
+// otomatis konsisten dengan halaman Pesan/Pengumuman itu sendiri.
 
 import 'package:get/get.dart';
 
 import '../../services/attendance_summary_service.dart';
 import '../../services/satpam_profile_service.dart';
 import '../../services/tracking_service.dart';
+import '../pengumuman/pengumuman_controller.dart';
+import '../pesan/pesan_controller.dart';
 
 class LandingController extends GetxController {
   final isOnDuty = false.obs;
@@ -17,12 +26,25 @@ class LandingController extends GetxController {
   final workingHours = Rxn<Map<String, dynamic>>();
   final todayAttendance = Rxn<Map<String, dynamic>>();
 
+  late final PesanController pesanController = Get.isRegistered<PesanController>()
+      ? Get.find<PesanController>()
+      : Get.put(PesanController(), permanent: true);
+
+  late final PengumumanController pengumumanController = Get.isRegistered<PengumumanController>()
+      ? Get.find<PengumumanController>()
+      : Get.put(PengumumanController(), permanent: true);
+
   @override
   void onInit() {
     super.onInit();
     refreshStatus();
     loadProfile();
     loadAttendanceSummary();
+    // Baca instance-nya sekali di sini supaya lazy getter di atas langsung
+    // trigger fetch (fetchMessages/fetchAnnouncements) begitu Beranda dibuka,
+    // bukan menunggu widget pertama yang mengaksesnya.
+    pesanController;
+    pengumumanController;
   }
 
   Future<void> refreshStatus() async {
