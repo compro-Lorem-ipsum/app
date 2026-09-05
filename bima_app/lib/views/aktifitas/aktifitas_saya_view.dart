@@ -42,11 +42,22 @@ class AktifitasSayaView extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Obx(() => ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
-                    itemCount: controller.currentGroups.length,
-                    itemBuilder: (context, index) => _buildGroup(controller.currentGroups[index]),
-                  )),
+              child: Obx(() {
+                if (controller.isLoading.value) {
+                  return const Center(child: CircularProgressIndicator(color: primaryColor));
+                }
+                final groups = controller.currentGroups;
+                if (groups.isEmpty) {
+                  return const Center(
+                    child: Text('Belum ada aktivitas.', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
+                  itemCount: groups.length,
+                  itemBuilder: (context, index) => _buildGroup(groups[index]),
+                );
+              }),
             ),
             const BottomNavBar(active: AppTab.aktifitas),
           ],
