@@ -45,6 +45,10 @@ class PesanController extends GetxController {
   final messages = <PesanItem>[].obs;
   final unreadCount = 0.obs;
   final isLoading = false.obs;
+  final isLoadingMore = false.obs;
+
+  String? _cursor;
+  bool _hasMore = true;
 
   @override
   void onInit() {
@@ -61,20 +65,52 @@ class PesanController extends GetxController {
 
   Future<void> fetchMessages() async {
     isLoading.value = true;
+    _cursor = null;
+    _hasMore = true;
+    try {
+      final page = await _fetchPage(cursor: null);
+      messages.value = page.items;
+      _cursor = page.nextCursor;
+      _hasMore = page.hasMore;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  /// Dipanggil saat scroll mendekati bawah daftar (lihat pesan_view.dart).
+  /// Endpoint ini keyset-paginated (cursor/limit + meta.has_more/
+  /// next_cursor) — bukan offset — jadi halaman berikutnya selalu minta
+  /// `next_cursor` dari respons sebelumnya, tidak pernah nomor halaman.
+  Future<void> loadMoreMessages() async {
+    if (isLoadingMore.value || !_hasMore) return;
+    isLoadingMore.value = true;
+    try {
+      final page = await _fetchPage(cursor: _cursor);
+      messages.addAll(page.items);
+      _cursor = page.nextCursor;
+      _hasMore = page.hasMore;
+    } finally {
+      isLoadingMore.value = false;
+    }
+  }
+
+  Future<({List<PesanItem> items, String? nextCursor, bool hasMore})> _fetchPage({String? cursor}) async {
     try {
       final response = await GetConnect().get(
         '$BASE_API_URL/messages',
+        query: {if (cursor != null) 'cursor': cursor},
         headers: await _authHeaders(),
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = ok && response.body is Map ? response.body['data'] : null;
+      final body = ok && response.body is Map ? response.body as Map : null;
+      final data = body?['data'];
       if (data is! List) {
         debugPrint('PesanController: gagal ambil pesan (status ${response.statusCode}).');
-        return;
+        return (items: <PesanItem>[], nextCursor: null, hasMore: false);
       }
 
-      messages.value = data.whereType<Map>().map((m) {
+      final items = data.whereType<Map>().map((m) {
         final createdAt = DateTime.tryParse((m['created_at'] ?? '').toString())?.toLocal();
         final sender = m['sender'] is Map ? Map<String, dynamic>.from(m['sender'] as Map) : null;
         return PesanItem(
@@ -85,10 +121,16 @@ class PesanController extends GetxController {
           isRead: m['is_read'] == true,
         );
       }).toList();
+
+      final meta = body?['meta'] is Map ? body!['meta'] as Map : null;
+      return (
+        items: items,
+        nextCursor: meta?['next_cursor']?.toString(),
+        hasMore: meta?['has_more'] == true,
+      );
     } catch (e) {
       debugPrint('PesanController: gagal ambil pesan: $e');
-    } finally {
-      isLoading.value = false;
+      return (items: <PesanItem>[], nextCursor: null, hasMore: false);
     }
   }
 

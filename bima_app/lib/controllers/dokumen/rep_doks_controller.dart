@@ -65,6 +65,10 @@ class RepDoksController extends GetxController {
 
   final dokumen = <DokumenItem>[].obs;
   final isLoading = true.obs;
+  final isLoadingMore = false.obs;
+
+  String? _cursor;
+  bool _hasMore = true;
 
   @override
   void onInit() {
@@ -72,24 +76,65 @@ class RepDoksController extends GetxController {
     loadDokumen();
   }
 
+  Future<Map<String, String>?> _authHeaders() async {
+    final token = await AuthService().getAccessToken();
+    if (token == null || token.isEmpty) return null;
+    return {'Authorization': 'Bearer $token'};
+  }
+
   Future<void> loadDokumen() async {
     isLoading.value = true;
+    _cursor = null;
+    _hasMore = true;
     try {
-      final token = await AuthService().getAccessToken();
+      final page = await _fetchPage(cursor: null);
+      dokumen.value = page.items;
+      _cursor = page.nextCursor;
+      _hasMore = page.hasMore;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> loadMoreDokumen() async {
+    if (isLoadingMore.value || !_hasMore) return;
+    isLoadingMore.value = true;
+    try {
+      final page = await _fetchPage(cursor: _cursor);
+      dokumen.addAll(page.items);
+      _cursor = page.nextCursor;
+      _hasMore = page.hasMore;
+    } finally {
+      isLoadingMore.value = false;
+    }
+  }
+
+  Future<({List<DokumenItem> items, String? nextCursor, bool hasMore})> _fetchPage({String? cursor}) async {
+    try {
       final response = await GetConnect().get(
         '$_baseApiUrl/shared-documents',
-        headers: (token != null && token.isNotEmpty) ? {'Authorization': 'Bearer $token'} : null,
+        query: {if (cursor != null) 'cursor': cursor},
+        headers: await _authHeaders(),
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = response.body is Map ? response.body['data'] : null;
-      if (ok && data is List) {
-        dokumen.value = data.whereType<Map>().map((item) => DokumenItem.fromApi(Map<String, dynamic>.from(item))).toList();
+      final body = ok && response.body is Map ? response.body as Map : null;
+      final data = body?['data'];
+      if (data is! List) {
+        debugPrint('RepDoksController: gagal memuat dokumen repositori (status ${response.statusCode}).');
+        return (items: <DokumenItem>[], nextCursor: null, hasMore: false);
       }
+
+      final items = data.whereType<Map>().map((item) => DokumenItem.fromApi(Map<String, dynamic>.from(item))).toList();
+      final meta = body?['meta'] is Map ? body!['meta'] as Map : null;
+      return (
+        items: items,
+        nextCursor: meta?['next_cursor']?.toString(),
+        hasMore: meta?['has_more'] == true,
+      );
     } catch (e) {
       debugPrint('RepDoksController: gagal memuat dokumen repositori: $e');
-    } finally {
-      isLoading.value = false;
+      return (items: <DokumenItem>[], nextCursor: null, hasMore: false);
     }
   }
 

@@ -37,24 +37,41 @@ class RekanKerjaView extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Obx(() {
-                if (controller.isLoading.value && controller.rekan.isEmpty) {
-                  return const Center(child: CircularProgressIndicator(color: primaryColor));
-                }
-                if (controller.rekan.isEmpty) {
-                  return Center(
-                    child: Text('Belum ada rekan kerja.', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+              child: NotificationListener<ScrollEndNotification>(
+                onNotification: (notification) {
+                  final metrics = notification.metrics;
+                  if (metrics.pixels >= metrics.maxScrollExtent - 200) {
+                    controller.loadMoreColleagues();
+                  }
+                  return false;
+                },
+                child: Obx(() {
+                  if (controller.isLoading.value && controller.rekan.isEmpty) {
+                    return const Center(child: CircularProgressIndicator(color: primaryColor));
+                  }
+                  if (controller.rekan.isEmpty) {
+                    return Center(
+                      child: Text('Belum ada rekan kerja.', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                    );
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
+                    itemCount: controller.rekan.length + (controller.isLoadingMore.value ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index >= controller.rekan.length) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: CircularProgressIndicator(color: primaryColor)),
+                        );
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildContactCard(controller, controller.rekan[index]),
+                      );
+                    },
                   );
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
-                  itemCount: controller.rekan.length,
-                  itemBuilder: (context, index) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _buildContactCard(controller, controller.rekan[index]),
-                  ),
-                );
-              }),
+                }),
+              ),
             ),
           ],
         ),

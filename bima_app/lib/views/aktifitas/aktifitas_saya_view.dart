@@ -42,22 +42,39 @@ class AktifitasSayaView extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Obx(() {
-                if (controller.isLoading.value) {
-                  return const Center(child: CircularProgressIndicator(color: primaryColor));
-                }
-                final groups = controller.currentGroups;
-                if (groups.isEmpty) {
-                  return const Center(
-                    child: Text('Belum ada aktivitas.', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+              child: NotificationListener<ScrollEndNotification>(
+                onNotification: (notification) {
+                  final metrics = notification.metrics;
+                  if (metrics.pixels >= metrics.maxScrollExtent - 200) {
+                    controller.loadMoreActivity();
+                  }
+                  return false;
+                },
+                child: Obx(() {
+                  if (controller.isLoading.value) {
+                    return const Center(child: CircularProgressIndicator(color: primaryColor));
+                  }
+                  final groups = controller.currentGroups;
+                  if (groups.isEmpty) {
+                    return const Center(
+                      child: Text('Belum ada aktivitas.', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                    );
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
+                    itemCount: groups.length + (controller.isLoadingMore.value ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index >= groups.length) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: CircularProgressIndicator(color: primaryColor)),
+                        );
+                      }
+                      return _buildGroup(groups[index]);
+                    },
                   );
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
-                  itemCount: groups.length,
-                  itemBuilder: (context, index) => _buildGroup(groups[index]),
-                );
-              }),
+                }),
+              ),
             ),
             const BottomNavBar(active: AppTab.aktifitas),
           ],

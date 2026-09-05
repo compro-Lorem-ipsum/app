@@ -24,10 +24,18 @@ class PengajuanView extends StatelessWidget {
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(25, 16, 25, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              child: NotificationListener<ScrollEndNotification>(
+                onNotification: (notification) {
+                  final metrics = notification.metrics;
+                  if (metrics.pixels >= metrics.maxScrollExtent - 200) {
+                    controller.loadMoreRequests();
+                  }
+                  return false;
+                },
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(25, 16, 25, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildHeader(controller),
                     const SizedBox(height: 20),
@@ -86,7 +94,14 @@ class PengajuanView extends StatelessWidget {
                             .toList(),
                       );
                     }),
+                    Obx(() => controller.isLoadingMore.value
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(child: CircularProgressIndicator(color: primaryColor)),
+                          )
+                        : const SizedBox.shrink()),
                   ],
+                ),
                 ),
               ),
             ),

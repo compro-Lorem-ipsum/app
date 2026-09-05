@@ -1,9 +1,17 @@
 // Controller untuk halaman 'Aktifitas Saya' (riwayat absensi & patroli).
-// Digabung dari GET /attendance (satpam otomatis hanya lihat rekam
-// miliknya sendiri) dan GET /patrols (idem), masing-masing diambil satu
-// halaman pertama (limit 50) — belum ada infinite-scroll/"muat lagi",
-// sama seperti pola di halaman list lain (Pesan/Pengajuan/Dokumen
-// Repositori) di proyek ini.
+// Digabung dari GET /attendance dan GET /patrols (satpam otomatis hanya
+// lihat rekam miliknya sendiri di keduanya).
+//
+// Infinite scroll pada layar gabungan ("Semua") itu rumit karena dua
+// sumber yang masing-masing keyset-paginated sendiri-sendiri harus
+// digabung lalu dikelompokkan ulang per tanggal. Solusinya: simpan
+// SELURUH entri mentah yang sudah pernah diambil dari kedua sumber
+// (_absensiRaw/_patroliRaw), lacak cursor & has_more masing-masing
+// TERPISAH, dan setiap kali ada halaman baru dari salah satu/kedua
+// sumber, seluruh entri mentah yang terkumpul di-regroup ulang dari nol
+// (bukan cuma di-append) supaya urutan tanggal tetap benar. "Muat lagi"
+// otomatis berhenti kalau KEDUA sumber sudah habis (has_more keduanya
+// false).
 //
 // Satu record absensi bisa menghasilkan DUA entri (check-in & check-out)
 // kalau keduanya sudah ada, mengikuti desain UI asli. Bentuk field pos di
@@ -70,10 +78,20 @@ class AktifitasSayaController extends GetxController {
 
   final selectedFilter = 'Semua'.obs;
   final isLoading = true.obs;
+  final isLoadingMore = false.obs;
 
   final _absensiGroups = <ActivityGroup>[].obs;
   final _patroliGroups = <ActivityGroup>[].obs;
   final _semuaGroups = <ActivityGroup>[].obs;
+
+  final List<_DatedEntry> _absensiRaw = [];
+  final List<_DatedEntry> _patroliRaw = [];
+  String? _absensiCursor;
+  String? _patroliCursor;
+  bool _absensiHasMore = true;
+  bool _patroliHasMore = true;
+
+  bool get _hasMoreAny => _absensiHasMore || _patroliHasMore;
 
   @override
   void onInit() {
@@ -89,16 +107,43 @@ class AktifitasSayaController extends GetxController {
 
   Future<void> loadActivity() async {
     isLoading.value = true;
+    _absensiRaw.clear();
+    _patroliRaw.clear();
+    _absensiCursor = null;
+    _patroliCursor = null;
+    _absensiHasMore = true;
+    _patroliHasMore = true;
     try {
-      final results = await Future.wait([_fetchAttendanceEntries(), _fetchPatrolEntries()]);
-      final absensiEntries = results[0];
-      final patroliEntries = results[1];
-      _absensiGroups.value = _group(absensiEntries);
-      _patroliGroups.value = _group(patroliEntries);
-      _semuaGroups.value = _group([...absensiEntries, ...patroliEntries]);
+      await Future.wait([_loadMoreAttendancePage(), _loadMorePatrolPage()]);
+      _regroup();
     } finally {
       isLoading.value = false;
     }
+  }
+
+  /// Dipanggil saat scroll mendekati bawah daftar (lihat
+  /// aktifitas_saya_view.dart). Minta halaman berikutnya dari SETIAP
+  /// sumber yang masih punya `has_more` — layar "Semua" mencampur
+  /// keduanya, jadi tidak bisa tahu dari posisi scroll saja sumber mana
+  /// yang perlu ditambah, aman meminta keduanya sekaligus.
+  Future<void> loadMoreActivity() async {
+    if (isLoadingMore.value || !_hasMoreAny) return;
+    isLoadingMore.value = true;
+    try {
+      final futures = <Future<void>>[];
+      if (_absensiHasMore) futures.add(_loadMoreAttendancePage());
+      if (_patroliHasMore) futures.add(_loadMorePatrolPage());
+      await Future.wait(futures);
+      _regroup();
+    } finally {
+      isLoadingMore.value = false;
+    }
+  }
+
+  void _regroup() {
+    _absensiGroups.value = _group(_absensiRaw);
+    _patroliGroups.value = _group(_patroliRaw);
+    _semuaGroups.value = _group([..._absensiRaw, ..._patroliRaw]);
   }
 
   String _jam(DateTime d) => '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
@@ -133,16 +178,31 @@ class AktifitasSayaController extends GetxController {
     }
   }
 
-  Future<List<_DatedEntry>> _fetchAttendanceEntries() async {
+Future<void> _loadMoreAttendancePage() async {
+    final page = await _fetchAttendancePage(cursor: _absensiCursor);
+    _absensiRaw.addAll(page.items);
+    _absensiCursor = page.nextCursor;
+    _absensiHasMore = page.hasMore;
+  }
+
+  Future<void> _loadMorePatrolPage() async {
+    final page = await _fetchPatrolPage(cursor: _patroliCursor);
+    _patroliRaw.addAll(page.items);
+    _patroliCursor = page.nextCursor;
+    _patroliHasMore = page.hasMore;
+  }
+
+  Future<({List<_DatedEntry> items, String? nextCursor, bool hasMore})> _fetchAttendancePage({String? cursor}) async {
     try {
       final response = await GetConnect().get(
         '$_baseApiUrl/attendance',
-        query: {'limit': '50'},
+        query: {if (cursor != null) 'cursor': cursor},
         headers: await _authHeaders(),
       );
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = ok && response.body is Map ? response.body['data'] : null;
-      if (data is! List) return [];
+      final body = ok && response.body is Map ? response.body as Map : null;
+      final data = body?['data'];
+      if (data is! List) return (items: <_DatedEntry>[], nextCursor: null, hasMore: false);
 
       final out = <_DatedEntry>[];
       for (final raw in data.whereType<Map>()) {
@@ -178,23 +238,30 @@ class AktifitasSayaController extends GetxController {
           ));
         }
       }
-      return out;
+
+      final meta = body?['meta'] is Map ? body!['meta'] as Map : null;
+      return (
+        items: out,
+        nextCursor: meta?['next_cursor']?.toString(),
+        hasMore: meta?['has_more'] == true,
+      );
     } catch (e) {
       debugPrint('AktifitasSayaController: gagal ambil riwayat absensi: $e');
-      return [];
+      return (items: <_DatedEntry>[], nextCursor: null, hasMore: false);
     }
   }
 
-  Future<List<_DatedEntry>> _fetchPatrolEntries() async {
+  Future<({List<_DatedEntry> items, String? nextCursor, bool hasMore})> _fetchPatrolPage({String? cursor}) async {
     try {
       final response = await GetConnect().get(
         '$_baseApiUrl/patrols',
-        query: {'limit': '50'},
+        query: {if (cursor != null) 'cursor': cursor},
         headers: await _authHeaders(),
       );
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = ok && response.body is Map ? response.body['data'] : null;
-      if (data is! List) return [];
+      final body = ok && response.body is Map ? response.body as Map : null;
+      final data = body?['data'];
+      if (data is! List) return (items: <_DatedEntry>[], nextCursor: null, hasMore: false);
 
       final out = <_DatedEntry>[];
       for (final raw in data.whereType<Map>()) {
@@ -216,10 +283,16 @@ class AktifitasSayaController extends GetxController {
           ),
         ));
       }
-      return out;
+
+      final meta = body?['meta'] is Map ? body!['meta'] as Map : null;
+      return (
+        items: out,
+        nextCursor: meta?['next_cursor']?.toString(),
+        hasMore: meta?['has_more'] == true,
+      );
     } catch (e) {
       debugPrint('AktifitasSayaController: gagal ambil riwayat patroli: $e');
-      return [];
+      return (items: <_DatedEntry>[], nextCursor: null, hasMore: false);
     }
   }
 

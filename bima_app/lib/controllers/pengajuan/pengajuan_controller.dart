@@ -29,7 +29,11 @@ class PengajuanController extends GetxController {
 
   final requests = <Map<String, dynamic>>[].obs;
   final isLoading = true.obs;
+  final isLoadingMore = false.obs;
   final isSubmitting = false.obs;
+
+  String? _cursor;
+  bool _hasMore = true;
 
   @override
   void onInit() {
@@ -48,17 +52,56 @@ class PengajuanController extends GetxController {
 
   Future<void> loadRequests() async {
     isLoading.value = true;
+    _cursor = null;
+    _hasMore = true;
     try {
-      final response = await GetConnect().get('$_baseApiUrl/requests', headers: await _authHeaders());
-      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = ok && response.body is Map ? response.body['data'] : null;
-      if (data is List) {
-        requests.value = data.whereType<Map>().map((item) => _fromApi(Map<String, dynamic>.from(item))).toList();
-      }
-    } catch (e) {
-      debugPrint('PengajuanController: gagal memuat pengajuan: $e');
+      final page = await _fetchPage(cursor: null);
+      requests.value = page.items;
+      _cursor = page.nextCursor;
+      _hasMore = page.hasMore;
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  Future<void> loadMoreRequests() async {
+    if (isLoadingMore.value || !_hasMore) return;
+    isLoadingMore.value = true;
+    try {
+      final page = await _fetchPage(cursor: _cursor);
+      requests.addAll(page.items);
+      _cursor = page.nextCursor;
+      _hasMore = page.hasMore;
+    } finally {
+      isLoadingMore.value = false;
+    }
+  }
+
+  Future<({List<Map<String, dynamic>> items, String? nextCursor, bool hasMore})> _fetchPage({String? cursor}) async {
+    try {
+      final response = await GetConnect().get(
+        '$_baseApiUrl/requests',
+        query: {if (cursor != null) 'cursor': cursor},
+        headers: await _authHeaders(),
+      );
+      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+      final body = ok && response.body is Map ? response.body as Map : null;
+      final data = body?['data'];
+      if (data is! List) {
+        debugPrint('PengajuanController: gagal memuat pengajuan (status ${response.statusCode}).');
+        return (items: <Map<String, dynamic>>[], nextCursor: null, hasMore: false);
+      }
+
+      final items = data.whereType<Map>().map((item) => _fromApi(Map<String, dynamic>.from(item))).toList();
+      final meta = body?['meta'] is Map ? body!['meta'] as Map : null;
+      return (
+        items: items,
+        nextCursor: meta?['next_cursor']?.toString(),
+        hasMore: meta?['has_more'] == true,
+      );
+    } catch (e) {
+      debugPrint('PengajuanController: gagal memuat pengajuan: $e');
+      return (items: <Map<String, dynamic>>[], nextCursor: null, hasMore: false);
     }
   }
 

@@ -49,6 +49,10 @@ class RekanKerjaController extends GetxController {
   final rekan = <RekanKerjaItem>[].obs;
   final clientNama = ''.obs;
   final isLoading = false.obs;
+  final isLoadingMore = false.obs;
+
+  String? _cursor;
+  bool _hasMore = true;
 
   @override
   void onInit() {
@@ -58,48 +62,82 @@ class RekanKerjaController extends GetxController {
 
   Future<void> fetchColleagues() async {
     isLoading.value = true;
+    _cursor = null;
+    _hasMore = true;
+    try {
+      final page = await _fetchPage(cursor: null);
+      rekan.value = page.items;
+      _cursor = page.nextCursor;
+      _hasMore = page.hasMore;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> loadMoreColleagues() async {
+    if (isLoadingMore.value || !_hasMore) return;
+    isLoadingMore.value = true;
+    try {
+      final page = await _fetchPage(cursor: _cursor);
+      rekan.addAll(page.items);
+      _cursor = page.nextCursor;
+      _hasMore = page.hasMore;
+    } finally {
+      isLoadingMore.value = false;
+    }
+  }
+
+  Future<({List<RekanKerjaItem> items, String? nextCursor, bool hasMore})> _fetchPage({String? cursor}) async {
     try {
       final token = await AuthService().getAccessToken();
       final response = await GetConnect().get(
         '$BASE_API_URL/satpam/colleagues',
+        query: {if (cursor != null) 'cursor': cursor},
         headers: token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = ok && response.body is Map ? response.body['data'] : null;
+      final body = ok && response.body is Map ? response.body as Map : null;
+      final data = body?['data'];
 
       if (data is Map) {
         clientNama.value = (data['client_nama'] ?? '').toString();
         final satpams = data['satpams'];
-        if (satpams is List) {
-          rekan.value = satpams.whereType<Map>().map((s) {
-            return RekanKerjaItem(
-              uuid: (s['uuid'] ?? '').toString(),
-              name: (s['nama'] ?? '').toString(),
-              nip: (s['nip'] ?? '').toString(),
-              // API mengembalikan jabatan huruf kecil ('anggota'/'danru'/
-              // 'chief') — kapitalkan huruf depan untuk ditampilkan.
-              role: _capitalize((s['jabatan'] ?? '').toString()),
-            );
-          }).toList();
-        }
-      } else {
-        debugPrint('RekanKerjaController: gagal ambil rekan kerja (status ${response.statusCode}).');
-        final error = response.body is Map ? response.body['error'] : null;
-        if (error is Map && error['code'] == 'NO_CLIENT_SCOPE') {
-          Get.snackbar(
-            'Belum Ada Penugasan',
-            'Anda belum ditugaskan ke client mana pun, jadi tidak ada rekan kerja yang bisa ditampilkan.',
-            backgroundColor: Colors.red,
-            colorText: Colors.white,
-            snackPosition: SnackPosition.BOTTOM,
-          );
-        }
+        final items = satpams is List
+            ? satpams.whereType<Map>().map((s) {
+                return RekanKerjaItem(
+                  uuid: (s['uuid'] ?? '').toString(),
+                  name: (s['nama'] ?? '').toString(),
+                  nip: (s['nip'] ?? '').toString(),
+                  // API mengembalikan jabatan huruf kecil ('anggota'/'danru'/
+                  // 'chief') — kapitalkan huruf depan untuk ditampilkan.
+                  role: _capitalize((s['jabatan'] ?? '').toString()),
+                );
+              }).toList()
+            : <RekanKerjaItem>[];
+        final meta = body?['meta'] is Map ? body!['meta'] as Map : null;
+        return (
+          items: items,
+          nextCursor: meta?['next_cursor']?.toString(),
+          hasMore: meta?['has_more'] == true,
+        );
       }
+
+      debugPrint('RekanKerjaController: gagal ambil rekan kerja (status ${response.statusCode}).');
+      final error = body?['error'];
+      if (error is Map && error['code'] == 'NO_CLIENT_SCOPE') {
+        Get.snackbar(
+          'Belum Ada Penugasan',
+          'Anda belum ditugaskan ke client mana pun, jadi tidak ada rekan kerja yang bisa ditampilkan.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+      return (items: <RekanKerjaItem>[], nextCursor: null, hasMore: false);
     } catch (e) {
       debugPrint('RekanKerjaController: gagal ambil rekan kerja: $e');
-    } finally {
-      isLoading.value = false;
+      return (items: <RekanKerjaItem>[], nextCursor: null, hasMore: false);
     }
   }
 
