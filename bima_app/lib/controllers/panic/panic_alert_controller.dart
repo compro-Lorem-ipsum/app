@@ -7,15 +7,23 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
+
+import '../../services/auth_service.dart';
 import '../../widgets/confirm_dialog.dart';
+
+final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
 class PanicAlertController extends GetxController {
   var isGpsActive = false.obs;
   var isSending = false.obs;
   var latitude = ''.obs;
   var longitude = ''.obs;
+
+  double? _lat;
+  double? _lng;
 
   final String namaSatpam = 'Nama Satpam';
   final String nip = 'NIP 123xxx';
@@ -65,6 +73,8 @@ class PanicAlertController extends GetxController {
 
       latitude.value = position.latitude.toStringAsFixed(6);
       longitude.value = position.longitude.toStringAsFixed(6);
+      _lat = position.latitude;
+      _lng = position.longitude;
       isGpsActive.value = true;
     } catch (e) {
       debugPrint('PanicAlertController: failed to resolve GPS status: $e');
@@ -93,19 +103,65 @@ class PanicAlertController extends GetxController {
 
     if (confirmed != true) return false;
 
-    await sendPanicAlert();
-    return true;
+    return sendPanicAlert();
   }
 
-  Future<void> sendPanicAlert() async {
-    if (!isGpsActive.value || isSending.value) return;
+  /// POST /alerts — satpam harus sedang on-duty (409 NOT_ON_DUTY kalau
+  /// tidak). Server yang menentukan penerima (satpam lain yang on-duty di
+  /// client yang sama, client itu sendiri, dan semua admin) — tidak ada
+  /// yang perlu dikirim dari sini selain koordinat.
+  Future<bool> sendPanicAlert() async {
+    if (!isGpsActive.value || isSending.value) return false;
+    final lat = _lat;
+    final lng = _lng;
+    if (lat == null || lng == null) return false;
 
     isSending.value = true;
-    // TODO: integrate real panic alert API call once backend endpoint is available.
-    await Future.delayed(const Duration(milliseconds: 300));
-    isSending.value = false;
+    try {
+      final token = await AuthService().getAccessToken();
+      final response = await GetConnect().post(
+        '$_baseApiUrl/alerts',
+        {'lat': lat, 'lng': lng},
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        },
+      );
 
-    showSentDialog();
+      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+      if (ok) {
+        showSentDialog();
+        return true;
+      }
+
+      _showSendError(response.body);
+      return false;
+    } catch (e) {
+      debugPrint('PanicAlertController: gagal mengirim panic alert: $e');
+      _showSendError(null, fallback: 'Tidak dapat terhubung ke server. Periksa koneksi Anda dan coba lagi.');
+      return false;
+    } finally {
+      isSending.value = false;
+    }
+  }
+
+  void _showSendError(dynamic body, {String? fallback}) {
+    final error = body is Map ? body['error'] : null;
+    final code = error is Map ? error['code']?.toString() : null;
+    final rawMessage = (error is Map ? error['message'] : null)?.toString();
+
+    final message = code == 'NOT_ON_DUTY'
+        ? 'Anda harus check-in terlebih dahulu untuk mengirim panic alert.'
+        : (rawMessage ?? fallback ?? 'Gagal mengirim panic alert, silakan coba lagi.');
+
+    Get.snackbar(
+      'Gagal Mengirim',
+      message,
+      backgroundColor: const Color(0xFFA80808),
+      colorText: Colors.white,
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 4),
+    );
   }
 
   void showSentDialog() {
