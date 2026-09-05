@@ -1,12 +1,15 @@
-// Controller untuk halaman Pesan (pesan satu arah dari mitra/client).
-// Data diambil dari GET /posts (Authorization Bearer token, tanpa body).
-// Shape item post belum dikonfirmasi persis oleh backend — diasumsikan
-// mengikuti pola yang sama dengan /announcement (title, description,
-// datetime), gampang disesuaikan begitu contoh respons asli tersedia.
+// Controller untuk halaman Pesan (pesan satu arah dari client ke satpam).
 //
-// Item panic alert (isPanic) di layar ini sebelumnya cuma mock/demo UI —
-// belum ada mekanisme real-time (push/socket) yang mengisinya, jadi tidak
-// ada lagi dummy panic item begitu data asli dari /posts dipakai di sini.
+// Sebelumnya controller ini memanggil endpoint `/posts` yang cuma
+// tebakan ("shape belum dikonfirmasi backend") — endpoint yang benar
+// sesuai dokumentasi adalah `GET /messages` (daftar), `GET
+// /messages/unread-count` (badge jumlah belum dibaca), dan `POST
+// /messages/:uuid/read` (tandai terbaca, idempotent).
+//
+// `isPanic` dipertahankan sebagai field tapi selalu false — konsep
+// "pesan bergaya panic alert" di kartu pesan (lihat pesan_view.dart) tidak
+// punya sumber data nyata; panic alert adalah fitur terpisah (`/alerts`),
+// bukan bagian dari `/messages`.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -17,6 +20,7 @@ import '../../services/auth_service.dart';
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
 class PesanItem {
+  final String uuid;
   final String title;
   final String time;
   final String preview;
@@ -25,6 +29,7 @@ class PesanItem {
   bool isRead;
 
   PesanItem({
+    required this.uuid,
     required this.title,
     required this.time,
     required this.preview,
@@ -38,21 +43,28 @@ class PesanController extends GetxController {
   static const primaryColor = Color(0xFF122C93);
 
   final messages = <PesanItem>[].obs;
+  final unreadCount = 0.obs;
   final isLoading = false.obs;
 
   @override
   void onInit() {
     super.onInit();
-    fetchPosts();
+    fetchMessages();
+    fetchUnreadCount();
   }
 
-  Future<void> fetchPosts() async {
+  Future<Map<String, String>?> _authHeaders() async {
+    final token = await AuthService().getAccessToken();
+    if (token == null || token.isEmpty) return null;
+    return {'Authorization': 'Bearer $token'};
+  }
+
+  Future<void> fetchMessages() async {
     isLoading.value = true;
     try {
-      final token = await AuthService().getAccessToken();
       final response = await GetConnect().get(
-        '$BASE_API_URL/posts',
-        headers: token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
+        '$BASE_API_URL/messages',
+        headers: await _authHeaders(),
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
@@ -62,18 +74,38 @@ class PesanController extends GetxController {
         return;
       }
 
-      messages.value = data.whereType<Map>().map((p) {
-        final datetime = DateTime.tryParse((p['datetime'] ?? '').toString())?.toLocal();
+      messages.value = data.whereType<Map>().map((m) {
+        final createdAt = DateTime.tryParse((m['created_at'] ?? '').toString())?.toLocal();
+        final sender = m['sender'] is Map ? Map<String, dynamic>.from(m['sender'] as Map) : null;
         return PesanItem(
-          title: (p['title'] ?? '').toString(),
-          time: datetime != null ? _formatTime(datetime) : '-',
-          preview: (p['description'] ?? '').toString(),
+          uuid: (m['uuid'] ?? '').toString(),
+          title: (m['title'] ?? sender?['nama'] ?? '').toString(),
+          time: createdAt != null ? _formatTime(createdAt) : '-',
+          preview: (m['content'] ?? '').toString(),
+          isRead: m['is_read'] == true,
         );
       }).toList();
     } catch (e) {
       debugPrint('PesanController: gagal ambil pesan: $e');
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  Future<void> fetchUnreadCount() async {
+    try {
+      final response = await GetConnect().get(
+        '$BASE_API_URL/messages/unread-count',
+        headers: await _authHeaders(),
+      );
+      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+      final data = ok && response.body is Map ? response.body['data'] : null;
+      final count = data is Map ? data['count'] : null;
+      if (count is num) {
+        unreadCount.value = count.toInt();
+      }
+    } catch (e) {
+      debugPrint('PesanController: gagal ambil jumlah pesan belum dibaca: $e');
     }
   }
 
@@ -84,11 +116,13 @@ class PesanController extends GetxController {
     return isToday ? 'Hari ini · $hm' : '${dt.day}/${dt.month}/${dt.year} · $hm';
   }
 
-  int get unreadCount => messages.where((m) => !m.isRead).length;
-
   void openMessage(PesanItem item) {
-    item.isRead = true;
-    messages.refresh();
+    if (!item.isRead) {
+      item.isRead = true;
+      messages.refresh();
+      if (unreadCount.value > 0) unreadCount.value -= 1;
+      _markRead(item.uuid);
+    }
 
     Get.dialog(
       Align(
@@ -132,5 +166,16 @@ class PesanController extends GetxController {
         ),
       ),
     );
+  }
+
+  /// Idempotent di server — aman dipanggil lagi kalau gagal (mis. offline);
+  /// state lokal sudah terlanjur menandai terbaca untuk UX yang responsif.
+  Future<void> _markRead(String uuid) async {
+    if (uuid.isEmpty) return;
+    try {
+      await GetConnect().post('$BASE_API_URL/messages/$uuid/read', {}, headers: await _authHeaders());
+    } catch (e) {
+      debugPrint('PesanController: gagal menandai pesan terbaca: $e');
+    }
   }
 }

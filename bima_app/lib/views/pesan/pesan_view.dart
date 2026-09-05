@@ -67,14 +67,14 @@ class PesanView extends StatelessWidget {
           child: Text('Pesan', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 25, color: primaryColor)),
         ),
         Obx(() {
-          if (controller.unreadCount == 0) return const SizedBox.shrink();
+          if (controller.unreadCount.value == 0) return const SizedBox.shrink();
           return Container(
             width: 30,
             height: 30,
             alignment: Alignment.center,
             decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle),
             child: Text(
-              '${controller.unreadCount}',
+              '${controller.unreadCount.value}',
               style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 16, color: Colors.white),
             ),
           );
