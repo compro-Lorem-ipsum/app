@@ -33,14 +33,28 @@ class RepDoksView extends StatelessWidget {
                 style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText),
               ),
               const SizedBox(height: 16),
-              Obx(() => Column(
-                    children: controller.dokumen
-                        .map((d) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _buildDocumentCard(controller, d),
-                            ))
-                        .toList(),
-                  )),
+              Obx(() {
+                if (controller.isLoading.value) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 24),
+                    child: Center(child: CircularProgressIndicator(color: primaryColor)),
+                  );
+                }
+                if (controller.dokumen.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 24),
+                    child: Text('Belum ada dokumen.', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                  );
+                }
+                return Column(
+                  children: controller.dokumen
+                      .map((d) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildDocumentCard(controller, d),
+                          ))
+                      .toList(),
+                );
+              }),
             ],
           ),
         ),
@@ -65,7 +79,7 @@ class RepDoksView extends StatelessWidget {
 
   Widget _buildDocumentCard(RepDoksController controller, DokumenItem item) {
     return GestureDetector(
-      onTap: controller.notAvailable,
+      onTap: () => controller.openDocument(item),
       child: CardContainer(
         child: Row(
           children: [
@@ -84,16 +98,18 @@ class RepDoksView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.size, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                  Text(controller.formatTanggal(item.createdAt), style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
                   const SizedBox(height: 4),
-                  Text(item.title, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Text(item.date, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                  Text(item.nama, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (!item.isReady) ...[
+                    const SizedBox(height: 4),
+                    const Text('Sedang diproses...', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                  ],
                 ],
               ),
             ),
             GestureDetector(
-              onTap: controller.notAvailable,
+              onTap: () => controller.openDocument(item),
               child: SvgPicture.asset('assets/icons/download_icon.svg', width: 25, height: 25),
             ),
           ],
