@@ -93,16 +93,19 @@ class RegisterAkunPart4Controller extends GetxController {
   }
 
   /// Apakah respons error dari backend berarti "wajah tidak terdeteksi"
-  /// pada PAS foto. Kode resminya `FACE_BAD_REQUEST`, tapi pesan mentah
-  /// juga dicek (mis. "no face detected", "face not found", "wajah tidak
-  /// terdeteksi") supaya variasi pesan dari backend tetap diarahkan ke
-  /// halaman Upload PAS Foto, bukan ke snackbar generik.
-  static bool _isNoFaceError(String? code, String? rawMessage) {
+  /// pada PAS foto. Kode resminya `FACE_BAD_REQUEST`, tapi seluruh body
+  /// respons juga dipindai sebagai teks (apa pun bentuk JSON-nya: `error`
+  /// berupa string atau map, `message`/`detail` di level atas, dsb.)
+  /// untuk frasa seperti "no face detected", "face not found", atau
+  /// "wajah tidak terdeteksi" — supaya variasi respons dari backend tetap
+  /// diarahkan ke halaman Upload PAS Foto, bukan ke snackbar generik.
+  static bool _isNoFaceError(String? code, dynamic body) {
     if (code == 'FACE_BAD_REQUEST') return true;
-    final msg = rawMessage?.toLowerCase() ?? '';
-    if (msg.isEmpty) return false;
-    if (msg.contains('no face') || msg.contains('face not') || msg.contains('face_not')) return true;
-    if (msg.contains('wajah') && (msg.contains('tidak') || msg.contains('gagal'))) return true;
+    final text = body?.toString().toLowerCase() ?? '';
+    if (text.isEmpty) return false;
+    if (text.contains('face_bad_request') || text.contains('no face') || text.contains('no_face')) return true;
+    if (text.contains('face not') || text.contains('face_not') || text.contains('face detect')) return true;
+    if (text.contains('wajah') && (text.contains('tidak') || text.contains('gagal'))) return true;
     return false;
   }
 
@@ -227,8 +230,7 @@ class RegisterAkunPart4Controller extends GetxController {
 
       final error = body is Map ? body['error'] : null;
       final code = error is Map ? error['code']?.toString() : null;
-      final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
-      if (_isNoFaceError(code, rawMessage)) {
+      if (_isNoFaceError(code, body)) {
         _returnToUploadFotoWithError(
           'Wajah tidak terdeteksi. Pastikan pencahayaan cukup terang dan wajah terlihat jelas tanpa masker atau kacamata gelap.',
         );
