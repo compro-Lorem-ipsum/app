@@ -267,19 +267,19 @@ class ProfileSayaView extends StatelessWidget {
   }
 
   Widget _buildKontakDaruratCard(ProfileSayaController controller) {
-    final data = controller.kontakDarurat.value;
+    final list = controller.kontakDaruratList;
     return CardContainer(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          if (data != null) _buildKontakDaruratRow(data, onTap: () => controller.openKontakDarurat(existing: data)),
-          _buildTambahKontakDaruratRow(controller),
+          for (final data in list) _buildKontakDaruratRow(data, onTap: () => controller.openKontakDarurat(existing: data)),
+          if (list.length < ProfileSayaController.maxKontakDarurat) _buildTambahKontakDaruratRow(controller),
         ],
       ),
     );
   }
 
-  Widget _buildKontakDaruratRow(Map<String, String> data, {required VoidCallback onTap}) {
+  Widget _buildKontakDaruratRow(Map<String, dynamic> data, {required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
