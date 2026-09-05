@@ -1,13 +1,17 @@
 // Controller untuk halaman Rekan Kerja (daftar rekan satu mitra/klien),
 // diambil dari GET /satpam/colleagues — rekan-rekan milik user yang sedang
 // login, ditentukan backend lewat access_token (bukan uuid manual di path).
-// Endpoint GET /satpam/colleagues/:uuid (untuk lihat rekan kerja satpam
-// TERTENTU) tersedia juga di backend tapi belum dipakai di layar ini.
+//
+// Nomor kontak TIDAK ikut di daftar itu — baru diambil sesaat sebelum
+// buka WhatsApp lewat GET /satpam/colleagues/:uuid (respons: { nama,
+// kontak_utama }), supaya tidak perlu fetch nomor semua rekan kalau
+// ujung-ujungnya cuma dipakai untuk satu orang.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 
@@ -91,10 +95,70 @@ class RekanKerjaController extends GetxController {
 
   static String _capitalize(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}';
 
-  /// API rekan kerja belum menyediakan nomor HP, jadi dialog ini murni
-  /// menampilkan identitas rekan tanpa aksi WhatsApp sungguhan (tombol
-  /// "Buka WhatsApp" masih placeholder, sama seperti sebelumnya).
-  void confirmWhatsapp(RekanKerjaItem item) {
+  final _isFetchingContact = false.obs;
+
+  void _showError(String title, String message) {
+    Get.snackbar(
+      title,
+      message,
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
+  /// Ambil nomor kontak rekan lewat GET /satpam/colleagues/:uuid (baru
+  /// diambil sesaat sebelum dipakai, bukan sekaligus untuk semua rekan
+  /// saat memuat daftar), lalu tampilkan dialog konfirmasi WhatsApp.
+  Future<void> confirmWhatsapp(RekanKerjaItem item) async {
+    if (_isFetchingContact.value) return;
+    _isFetchingContact.value = true;
+    try {
+      final token = await AuthService().getAccessToken();
+      final response = await GetConnect().get(
+        '$BASE_API_URL/satpam/colleagues/${item.uuid}',
+        headers: token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
+      );
+
+      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+      final data = ok && response.body is Map ? response.body['data'] : null;
+      final kontakUtama = (data is Map ? data['kontak_utama'] : null)?.toString();
+
+      if (kontakUtama == null || kontakUtama.trim().isEmpty) {
+        _showError('Nomor Tidak Tersedia', '${item.name} belum memiliki nomor kontak.');
+        return;
+      }
+
+      _showWhatsappDialog(item, kontakUtama.trim());
+    } catch (e) {
+      debugPrint('RekanKerjaController: gagal ambil kontak rekan kerja: $e');
+      _showError('Gagal Memuat Kontak', 'Tidak dapat terhubung ke server. Periksa koneksi Anda dan coba lagi.');
+    } finally {
+      _isFetchingContact.value = false;
+    }
+  }
+
+  /// wa.me butuh nomor internasional tanpa '+' / '0' depan — nomor lokal
+  /// yang diawali '0' diubah ke kode negara Indonesia '62'.
+  String _toWhatsappNumber(String raw) {
+    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.startsWith('0') ? '62${digits.substring(1)}' : digits;
+  }
+
+  Future<void> _openWhatsapp(String kontakUtama) async {
+    final uri = Uri.parse('https://wa.me/${_toWhatsappNumber(kontakUtama)}');
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        _showError('Gagal Membuka', 'Tidak ada aplikasi WhatsApp yang terpasang.');
+      }
+    } catch (e) {
+      debugPrint('RekanKerjaController: gagal membuka WhatsApp: $e');
+      _showError('Gagal Membuka', 'Terjadi kesalahan saat membuka WhatsApp.');
+    }
+  }
+
+  void _showWhatsappDialog(RekanKerjaItem item, String kontakUtama) {
     Get.dialog(
       Align(
         alignment: Alignment.bottomCenter,
@@ -138,7 +202,10 @@ class RekanKerjaController extends GetxController {
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   ),
-                  onPressed: () => Get.back(),
+                  onPressed: () {
+                    Get.back();
+                    _openWhatsapp(kontakUtama);
+                  },
                   child: const Text('Buka WhatsApp', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 16)),
                 ),
               ),
