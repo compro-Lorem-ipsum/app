@@ -16,6 +16,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/satpam_profile_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/workmanager_callback.dart';
 import '../../widgets/success_screen.dart';
@@ -31,6 +32,11 @@ class AbsenCheckinController extends GetxController {
   var distanceMeter = 0.0.obs;
   var isInRadius = false.obs;
   var isLoadingLocation = true.obs;
+
+  final profile = Rxn<Map<String, dynamic>>();
+  String get displayNama => (profile.value?['nama'] as String?) ?? '-';
+  String get displayNip => (profile.value?['nip'] as String?) ?? '-';
+  String get displayClient => (profile.value?['client'] as String?) ?? '-';
 
   // Placeholder posisi Pos Utama, menunggu data mitra dari backend.
   static const double posLatitude = -6.200000;
@@ -53,6 +59,11 @@ class AbsenCheckinController extends GetxController {
     isCheckIn = (args is Map && args['isCheckIn'] is bool) ? args['isCheckIn'] as bool : true;
     _getCurrentLocation();
     _initializeCamera();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    profile.value = await SatpamProfileService().getProfile();
   }
 
   @override

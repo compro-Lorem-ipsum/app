@@ -41,7 +41,7 @@ class AbsenCheckinView extends StatelessWidget {
             children: [
               _buildHeader(controller),
               const SizedBox(height: 20),
-              _buildSatpamCard(),
+              Obx(() => _buildSatpamCard(controller)),
               const SizedBox(height: 16),
               _buildLocationCard(controller),
               const SizedBox(height: 16),
@@ -76,7 +76,7 @@ class AbsenCheckinView extends StatelessWidget {
     );
   }
 
-  Widget _buildSatpamCard() {
+  Widget _buildSatpamCard(AbsenCheckinController controller) {
     return CardContainer(
       child: Row(
         children: [
@@ -86,14 +86,14 @@ class AbsenCheckinView extends StatelessWidget {
             child: const Icon(Icons.person, color: primaryColor, size: 30),
           ),
           const SizedBox(width: 12),
-          const Column(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Nama Satpam', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black)),
-              SizedBox(height: 4),
-              Text('NIP 123xxx', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
-              SizedBox(height: 2),
-              Text('Shift Pagi 07:00 - 17:00', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+              Text(controller.displayNama, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black)),
+              const SizedBox(height: 4),
+              Text('NIP ${controller.displayNip}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+              const SizedBox(height: 2),
+              Text(controller.displayClient, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
             ],
           ),
         ],

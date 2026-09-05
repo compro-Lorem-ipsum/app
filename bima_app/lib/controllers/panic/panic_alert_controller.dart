@@ -12,6 +12,7 @@ import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/satpam_profile_service.dart';
 import '../../widgets/confirm_dialog.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
@@ -25,14 +26,20 @@ class PanicAlertController extends GetxController {
   double? _lat;
   double? _lng;
 
-  final String namaSatpam = 'Nama Satpam';
-  final String nip = 'NIP 123xxx';
-  final String lokasiPos = 'Lokasi Pos - Nama Mitra';
+  final profile = Rxn<Map<String, dynamic>>();
+  String get namaSatpam => (profile.value?['nama'] as String?) ?? '-';
+  String get nip => 'NIP ${(profile.value?['nip'] as String?) ?? '-'}';
+  String get lokasiPos => (profile.value?['client'] as String?) ?? '-';
 
   @override
   void onInit() {
     super.onInit();
     _checkGpsStatus();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    profile.value = await SatpamProfileService().getProfile();
   }
 
   Future<void> _checkGpsStatus() async {

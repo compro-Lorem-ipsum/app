@@ -47,9 +47,9 @@ class LandingView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildHeader(),
+                    Obx(() => _buildHeader(controller)),
                     const SizedBox(height: 20),
-                    _buildShiftSummaryCard(),
+                    Obx(() => _buildShiftSummaryCard(controller)),
                     const SizedBox(height: 16),
                     _buildPanicAlert(),
                     const SizedBox(height: 24),
@@ -81,7 +81,7 @@ class LandingView extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(LandingController controller) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -90,9 +90,9 @@ class LandingView extends StatelessWidget {
           children: [
             Text('Selamat Pagi', style: AppText.regular.copyWith(fontSize: 14, color: AppColors.disabled)),
             const SizedBox(height: 4),
-            Text('Nama Satpam', style: AppText.bold.copyWith(fontSize: 16, color: AppColors.primary)),
+            Text(controller.displayNama, style: AppText.bold.copyWith(fontSize: 16, color: AppColors.primary)),
             const SizedBox(height: 4),
-            Text('NIP 123xxx · Anggota', style: AppText.regular.copyWith(fontSize: 14, color: AppColors.disabled)),
+            Text('NIP ${controller.displayNip} · ${controller.displayJabatan}', style: AppText.regular.copyWith(fontSize: 14, color: AppColors.disabled)),
           ],
         ),
         GestureDetector(
@@ -125,26 +125,31 @@ class LandingView extends StatelessWidget {
     );
   }
 
-  Widget _buildShiftSummaryCard() {
+  Widget _buildShiftSummaryCard(LandingController controller) {
     return CardContainer(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Penempatan Mitra', style: AppText.regular.copyWith(fontSize: 12, color: Colors.black)),
           const SizedBox(height: 4),
-          Text('Nama Mitra', style: AppText.semiBold.copyWith(fontSize: 16, color: Colors.black)),
+          Text(controller.displayClient, style: AppText.semiBold.copyWith(fontSize: 16, color: Colors.black)),
           const SizedBox(height: 12),
+          // TODO: Jam Masuk Shift/Durasi/rekap jam butuh endpoint jadwal &
+          // rekap absensi (mis. GET /attendance/today, GET
+          // /attendance/working-hours) yang belum diselaraskan — lihat
+          // laporan status. Placeholder di bawah SENGAJA dibiarkan '-'
+          // (bukan angka palsu) sampai itu dikerjakan.
           Row(
             children: [
-              Expanded(child: _buildStat('Jam Masuk Shift', '06:30')),
-              Expanded(child: _buildStat('Durasi Hari ini', '9j 30m')),
+              Expanded(child: _buildStat('Jam Masuk Shift', '-')),
+              Expanded(child: _buildStat('Durasi Hari ini', '-')),
             ],
           ),
           Container(margin: const EdgeInsets.symmetric(vertical: 12), height: 1, color: AppColors.cardBorder),
           Row(
             children: [
-              Expanded(child: _buildStat('Bulan ini di Mitra', '225j 45m')),
-              Expanded(child: _buildStat('Total di Mitra ini', '313j 01m')),
+              Expanded(child: _buildStat('Bulan ini di Mitra', '-')),
+              Expanded(child: _buildStat('Total di Mitra ini', '-')),
             ],
           ),
         ],

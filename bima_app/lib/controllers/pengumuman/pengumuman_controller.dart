@@ -1,8 +1,10 @@
 // Controller untuk daftar Pengumuman dan halaman detail/isi pengumuman.
-// Data diambil dari GET /announcement (Authorization Bearer token, tanpa
-// body). Status baca/belum-dibaca murni lokal di sisi klien — API belum
-// menyediakan konsep itu, jadi semua pengumuman dianggap "belum dibaca"
-// sampai pengguna membuka detailnya.
+// Data diambil dari GET /announcements (Authorization Bearer token, tanpa
+// body) — sebelumnya salah ketik ke /announcement (tunggal) sehingga
+// pengumuman yang sudah di-post admin tidak pernah termuat. Status baca/
+// belum-dibaca murni lokal di sisi klien — API belum menyediakan konsep
+// itu, jadi semua pengumuman dianggap "belum dibaca" sampai pengguna
+// membuka detailnya.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -30,7 +32,7 @@ class PengumumanController extends GetxController {
     try {
       final token = await AuthService().getAccessToken();
       final response = await GetConnect().get(
-        '$BASE_API_URL/announcement',
+        '$BASE_API_URL/announcements',
         headers: token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
       );
 

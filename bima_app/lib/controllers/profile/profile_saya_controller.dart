@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/panic_alert_polling_service.dart';
+import '../../services/satpam_profile_service.dart';
 import 'tambah_kontak_darurat_controller.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
@@ -44,19 +45,10 @@ class ProfileSayaController extends GetxController {
   Future<void> loadProfile() async {
     isLoadingProfile.value = true;
     try {
-      final token = await AuthService().getAccessToken();
-      final response = await GetConnect().get(
-        '$_baseApiUrl/satpam/me',
-        headers: (token != null && token.isNotEmpty) ? {'Authorization': 'Bearer $token'} : null,
-      );
-
-      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = response.body is Map ? response.body['data'] : null;
-      if (ok && data is Map) {
-        profile.value = Map<String, dynamic>.from(data);
-      }
-    } catch (e) {
-      debugPrint('ProfileSayaController: gagal memuat profil: $e');
+      // forceRefresh: true — halaman Profil Saya adalah sumber kebenaran,
+      // jadi selalu ambil data terbaru dari server (bukan cache lama yang
+      // mungkin sudah dipakai halaman lain seperti Beranda/Check-in).
+      profile.value = await SatpamProfileService().getProfile(forceRefresh: true);
     } finally {
       isLoadingProfile.value = false;
     }
@@ -133,6 +125,7 @@ class ProfileSayaController extends GetxController {
 
   Future<void> logout() async {
     await PanicAlertPollingService().stop();
+    SatpamProfileService().clear();
     await AuthService().logout();
     Get.offAllNamed('/login');
   }
