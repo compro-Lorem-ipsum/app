@@ -92,6 +92,20 @@ class RegisterAkunPart4Controller extends GetxController {
     Get.back();
   }
 
+  /// Apakah respons error dari backend berarti "wajah tidak terdeteksi"
+  /// pada PAS foto. Kode resminya `FACE_BAD_REQUEST`, tapi pesan mentah
+  /// juga dicek (mis. "no face detected", "face not found", "wajah tidak
+  /// terdeteksi") supaya variasi pesan dari backend tetap diarahkan ke
+  /// halaman Upload PAS Foto, bukan ke snackbar generik.
+  static bool _isNoFaceError(String? code, String? rawMessage) {
+    if (code == 'FACE_BAD_REQUEST') return true;
+    final msg = rawMessage?.toLowerCase() ?? '';
+    if (msg.isEmpty) return false;
+    if (msg.contains('no face') || msg.contains('face not') || msg.contains('face_not')) return true;
+    if (msg.contains('wajah') && (msg.contains('tidak') || msg.contains('gagal'))) return true;
+    return false;
+  }
+
   /// `statusCode`/`code` dipakai untuk menerjemahkan beberapa error yang
   /// pesan mentahnya kurang jelas buat pengguna. Backend membungkusnya
   /// sebagai `{"error": {"code": ..., "message": ...}}`.
@@ -213,7 +227,8 @@ class RegisterAkunPart4Controller extends GetxController {
 
       final error = body is Map ? body['error'] : null;
       final code = error is Map ? error['code']?.toString() : null;
-      if (code == 'FACE_BAD_REQUEST') {
+      final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
+      if (_isNoFaceError(code, rawMessage)) {
         _returnToUploadFotoWithError(
           'Wajah tidak terdeteksi. Pastikan pencahayaan cukup terang dan wajah terlihat jelas tanpa masker atau kacamata gelap.',
         );
