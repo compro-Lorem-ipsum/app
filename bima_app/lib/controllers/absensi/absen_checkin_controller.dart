@@ -38,10 +38,20 @@ class AbsenCheckinController extends GetxController {
   String get displayNip => (profile.value?['nip'] as String?) ?? '-';
   String get displayClient => (profile.value?['client'] as String?) ?? '-';
 
-  // Placeholder posisi Pos Utama, menunggu data mitra dari backend.
-  static const double posLatitude = -6.200000;
-  static const double posLongitude = 106.816666;
-  static const double radiusMeter = 100;
+  /// Pos utama satpam ini (GET /posts?type=utama) — dipakai untuk hitung
+  /// jarak & tampilan lokasi, menggantikan koordinat placeholder yang
+  /// sebelumnya hardcoded.
+  final posUtama = Rxn<Map<String, dynamic>>();
+  String get posNama => (posUtama.value?['nama'] as String?) ?? 'Pos Utama';
+
+  /// Radius toleransi untuk HINT di layar ini saja. Batas sesungguhnya
+  /// (clients.radius_utama + buffer 15m) ditegakkan di server dan
+  /// dikembalikan lewat error.code OUTSIDE_POS_RADIUS saat submit —
+  /// nilai radius_utama milik client itu sendiri belum diekspos lewat
+  /// endpoint mana pun yang bisa diakses satpam, jadi angka di sini
+  /// murni perkiraan supaya hint jarak tidak jauh menyesatkan, bukan
+  /// nilai yang menentukan boleh/tidaknya submit.
+  static const double _assumedRadiusMeter = 100;
 
   // ===== KAMERA (live preview langsung di halaman ini) =====
   CameraController? cameraController;
@@ -57,6 +67,7 @@ class AbsenCheckinController extends GetxController {
     super.onInit();
     final args = Get.arguments;
     isCheckIn = (args is Map && args['isCheckIn'] is bool) ? args['isCheckIn'] as bool : true;
+    _loadPosUtama();
     _getCurrentLocation();
     _initializeCamera();
     _loadProfile();
@@ -64,6 +75,38 @@ class AbsenCheckinController extends GetxController {
 
   Future<void> _loadProfile() async {
     profile.value = await SatpamProfileService().getProfile();
+  }
+
+  Future<void> _loadPosUtama() async {
+    try {
+      final token = await AuthService().getAccessToken();
+      final response = await GetConnect().get(
+        '$BASE_API_URL/posts',
+        query: {'type': 'utama'},
+        headers: (token != null && token.isNotEmpty) ? {'Authorization': 'Bearer $token'} : null,
+      );
+      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+      final data = ok && response.body is Map ? response.body['data'] : null;
+      if (data is List && data.isNotEmpty && data.first is Map) {
+        posUtama.value = Map<String, dynamic>.from(data.first as Map);
+        _recomputeDistance();
+      }
+    } catch (e) {
+      debugPrint('AbsenCheckinController: gagal ambil pos utama: $e');
+    }
+  }
+
+  void _recomputeDistance() {
+    final pos = posUtama.value;
+    if (pos == null) return;
+    if (latitude.value == 0 && longitude.value == 0) return;
+    final posLat = (pos['lat'] as num?)?.toDouble();
+    final posLng = (pos['lng'] as num?)?.toDouble();
+    if (posLat == null || posLng == null) return;
+
+    final distance = Geolocator.distanceBetween(latitude.value, longitude.value, posLat, posLng);
+    distanceMeter.value = distance;
+    isInRadius.value = distance <= _assumedRadiusMeter;
   }
 
   @override
@@ -94,19 +137,7 @@ class AbsenCheckinController extends GetxController {
       latitude.value = position.latitude;
       longitude.value = position.longitude;
       accuracyMeter.value = position.accuracy;
-
-      final distance = Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
-        posLatitude,
-        posLongitude,
-      );
-      distanceMeter.value = distance;
-      // SEMENTARA: anggap selalu dalam radius dari lokasi mana pun supaya
-      // check-in/out bisa dites tanpa harus berada dekat Pos Utama.
-      // TODO: kembalikan ke `distance <= radiusMeter` kalau sudah siap
-      // menegakkan pembatasan radius sungguhan.
-      isInRadius.value = true;
+      _recomputeDistance();
     } catch (e) {
       debugPrint("Gagal mengambil lokasi: $e");
     } finally {
@@ -339,7 +370,7 @@ class AbsenCheckinController extends GetxController {
           subtitle: 'Absensi Anda telah berhasil disimpan.',
           details: {
             'WAKTU': waktu,
-            'LOKASI': 'Pos Utama',
+            'LOKASI': posNama,
             if (isCheckIn) 'STATUS': kategori.isEmpty ? '-' : kategori,
           },
           buttonLabel: 'Kembali ke Beranda',

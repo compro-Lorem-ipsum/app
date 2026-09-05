@@ -43,7 +43,7 @@ class AbsenCheckinView extends StatelessWidget {
               const SizedBox(height: 20),
               Obx(() => _buildSatpamCard(controller)),
               const SizedBox(height: 16),
-              _buildLocationCard(controller),
+              Obx(() => _buildLocationCard(controller)),
               const SizedBox(height: 16),
               _buildVerifikasiCard(controller),
               const SizedBox(height: 16),
@@ -119,9 +119,9 @@ class AbsenCheckinView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          const Text(
-            'Pos Utama - Nama Mitra',
-            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black),
+          Text(
+            '${controller.posNama} - ${controller.displayClient}',
+            style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black),
           ),
           const SizedBox(height: 10),
           Obx(() => MapPreview(
