@@ -3,8 +3,6 @@
 // fitur (auth, beranda, absensi, patroli, panic, dst) yang strukturnya
 // mengikuti folder lib/controllers dan lib/views.
 
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -77,13 +75,6 @@ Future<void> main() async {
   // dari GpsTaskHandler (lihat services/gps_task_handler.dart) yang berjalan
   // di isolate/FlutterEngine foreground service terpisah.
   FlutterForegroundTask.initCommunicationPort();
-
-  // Push notification (FCM) - lihat services/fcm_service.dart. Handler
-  // background HARUS didaftarkan di sini, sebelum runApp, supaya Firebase
-  // tahu fungsi mana yang dipanggil di isolate terpisah saat pesan masuk
-  // ketika app di background/killed.
-  await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Kalau sesi login sebelumnya tidak dicentang "Ingat Saya", hapus di sini
   // supaya cold-start ini kembali minta login (lihat AuthService).

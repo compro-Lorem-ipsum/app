@@ -3,12 +3,20 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    // Push notification (Firebase Cloud Messaging). WAJIB ada
-    // android/app/google-services.json supaya build ini berhasil (bukan
-    // cuma runtime) - taruh file itu di sini sebelum build, lihat
-    // instruksi dari tim BIMA / buat project Firebase percobaan sendiri
-    // dengan applicationId com.example.bima_app di bawah.
-    id("com.google.gms.google-services")
+}
+
+// Push notification (Firebase Cloud Messaging) - plugin ini WAJIB ada
+// google-services.json di folder ini kalau di-apply, tapi file itu
+// sengaja tidak ikut di-commit (API key Firebase project production),
+// lihat instruksi dari tim BIMA / buat project Firebase percobaan
+// sendiri dengan applicationId com.example.bima_app di bawah. Supaya fitur
+// LAIN (non-FCM) tetap bisa dibuild & ditest sebelum file itu tersedia,
+// plugin ini HANYA diterapkan kalau filenya memang ada - begitu file
+// ditaruh di sini, build berikutnya otomatis mengaktifkannya lagi tanpa
+// perlu ubah kode. FcmService (lib/services/fcm_service.dart) juga
+// menjaga diri sendiri lewat try/catch di sisi Dart untuk kondisi yang sama.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 android {

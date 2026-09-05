@@ -23,6 +23,14 @@
 // dotenv.load(), dan inisialisasi flutter_local_notifications harus
 // diulang di sini juga (lewat _ensureLocalNotificationsInitialized, yang
 // dijaga idempoten per-isolate lewat flag statis).
+//
+// GRACEFUL DEGRADATION: kalau android/app/google-services.json belum ada
+// (lihat android/app/build.gradle.kts - plugin-nya hanya diterapkan kalau
+// filenya ada), Firebase.initializeApp() melempar exception saat runtime.
+// Semua pemanggilan Firebase di sini dibungkus try/catch dan dijaga lewat
+// [_available] supaya fitur lain di app tetap jalan normal tanpa push
+// notification, bukannya crash total - begitu file itu ditaruh, fitur ini
+// otomatis aktif lagi di run berikutnya tanpa perlu ubah kode.
 
 import 'dart:convert';
 
@@ -37,7 +45,12 @@ import 'auth_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('FcmService (background): Firebase belum dikonfigurasi (diabaikan): $e');
+    return;
+  }
   try {
     await dotenv.load(fileName: '.env');
   } catch (e) {
@@ -53,6 +66,12 @@ class FcmService {
 
   static final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   static bool _localNotificationsReady = false;
+
+  /// False sampai [init] berhasil memastikan Firebase benar-benar
+  /// terkonfigurasi (google-services.json ada) - dipakai method publik
+  /// lain di kelas ini supaya tidak memanggil FirebaseMessaging API sama
+  /// sekali kalau tidak, karena itu akan melempar exception.
+  bool _available = false;
 
   String get _baseApiUrl => dotenv.env['BASE_API_URL']!;
 
@@ -73,30 +92,46 @@ class FcmService {
   /// keputusan registrasi bisa masuk SEBELUM satpam sempat login pertama
   /// kali. Kalau sesi login sudah ada (cold-start "Ingat Saya"), token
   /// saat ini juga langsung didaftarkan ulang di akhir fungsi ini.
+  ///
+  /// Firebase.initializeApp() & pendaftaran background handler ada di
+  /// SINI (bukan main.dart) supaya satu try/catch ini menjaga semuanya -
+  /// kalau google-services.json belum ada, seluruh fitur push notification
+  /// nonaktif dengan rapi tanpa melempar apa pun ke pemanggil.
   Future<void> init() async {
-    await FirebaseMessaging.instance.requestPermission();
-    await _ensureLocalNotificationsInitialized();
+    try {
+      await Firebase.initializeApp();
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+      await FirebaseMessaging.instance.requestPermission();
+      await _ensureLocalNotificationsInitialized();
 
-    // App masih hidup (foreground) saat pesan masuk.
-    FirebaseMessaging.onMessage.listen(_showLocalNotification);
-    // App di background (belum ditutup total) lalu notifikasi FCM asli
-    // di-tap untuk membuka app kembali.
-    FirebaseMessaging.onMessageOpenedApp.listen((_) => _handleDecisionTap());
-    // Token bisa rotate kapan saja (reinstall, clear data, dsb) - daftarkan
-    // ulang setiap kali itu terjadi.
-    FirebaseMessaging.instance.onTokenRefresh.listen(registerToken);
+      // App masih hidup (foreground) saat pesan masuk.
+      FirebaseMessaging.onMessage.listen(_showLocalNotification);
+      // App di background (belum ditutup total) lalu notifikasi FCM asli
+      // di-tap untuk membuka app kembali.
+      FirebaseMessaging.onMessageOpenedApp.listen((_) => _handleDecisionTap());
+      // Token bisa rotate kapan saja (reinstall, clear data, dsb) -
+      // daftarkan ulang setiap kali itu terjadi.
+      FirebaseMessaging.instance.onTokenRefresh.listen(registerToken);
 
-    // App diluncurkan LEWAT tap notifikasi FCM asli saat sebelumnya
-    // tertutup total.
-    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-    if (initialMessage != null) _handleDecisionTap();
+      // App diluncurkan LEWAT tap notifikasi FCM asli saat sebelumnya
+      // tertutup total.
+      final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+      if (initialMessage != null) _handleDecisionTap();
+
+      _available = true;
+    } catch (e) {
+      debugPrint('FcmService: Firebase belum dikonfigurasi (google-services.json belum ada) - push notification dinonaktifkan sementara: $e');
+      return;
+    }
 
     await registerCurrentToken();
   }
 
   /// Ambil token FCM saat ini lalu daftarkan ke backend (no-op kalau belum
-  /// login - dipakai juga oleh onTokenRefresh yang aktif terus-menerus).
+  /// login, atau kalau Firebase belum dikonfigurasi - dipakai juga oleh
+  /// onTokenRefresh yang aktif terus-menerus).
   Future<void> registerCurrentToken() async {
+    if (!_available) return;
     try {
       final fid = await FirebaseMessaging.instance.getToken();
       if (fid != null) await registerToken(fid);
@@ -110,6 +145,7 @@ class FcmService {
   /// offline); percobaan berikutnya (onTokenRefresh, atau init() saat app
   /// dibuka lagi) akan mencoba ulang.
   Future<void> registerToken(String fid) async {
+    if (!_available) return;
     final accessToken = await AuthService().getAccessToken();
     if (accessToken == null || accessToken.isEmpty) return;
 
@@ -128,9 +164,11 @@ class FcmService {
   /// lihat register_akun_part4_controller.dart) - satpam yang masih
   /// pending belum bisa login jadi tidak bisa lewat [registerToken] biasa;
   /// endpoint itu menerima `fid`+`platform` langsung di body-nya sendiri.
-  /// Null kalau token FCM belum tersedia (mis. Play Services bermasalah)
-  /// - pemanggil tetap boleh lanjut daftar tanpanya.
+  /// Null kalau token FCM belum tersedia (mis. Firebase belum dikonfigurasi,
+  /// atau Play Services bermasalah) - pemanggil tetap boleh lanjut daftar
+  /// tanpanya (fid+platform memang opsional di endpoint itu).
   Future<Map<String, String>?> currentDeviceFields() async {
+    if (!_available) return null;
     try {
       final fid = await FirebaseMessaging.instance.getToken();
       if (fid == null) return null;
