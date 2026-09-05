@@ -111,6 +111,45 @@ class UnggahBerkasView extends StatelessWidget {
     );
   }
 
+  /// `fileSize` cuma dikenal untuk file yang baru saja dipilih di sesi ini
+  /// (backend tidak mengirim ukuran byte untuk dokumen lama) - jangan
+  /// ditampilkan sama sekali kalau null, daripada muncul teks "null"
+  /// literal. Label & warna ikut status validasi backend
+  /// (VALID/PENDING/INVALID) — dokumen yang masih diproses atau ditolak
+  /// tidak boleh terlihat sama seperti yang sudah berhasil.
+  Widget _buildStatusRow(DocumentSlot slot) {
+    final String label;
+    final Color color;
+    final String? icon;
+    switch (slot.fileStatus) {
+      case 'INVALID':
+        label = 'Ditolak, unggah ulang';
+        color = const Color(0xFFA70202);
+        icon = null;
+        break;
+      case 'PENDING':
+        label = 'Sedang diproses';
+        color = AppColors.disabled;
+        icon = 'assets/icons/clock_icon.svg';
+        break;
+      default:
+        label = 'Berhasil diunggah';
+        color = const Color(0xFF008236);
+        icon = 'assets/icons/check_one.svg';
+    }
+
+    return Row(
+      children: [
+        if (slot.fileSize != null) Text('${slot.fileSize} · ', style: AppText.regular.copyWith(fontSize: 10, color: AppColors.disabled)),
+        if (icon != null) ...[
+          SvgPicture.asset(icon, width: 12, height: 12),
+          const SizedBox(width: 4),
+        ],
+        Text(label, style: AppText.medium.copyWith(fontSize: 10, color: color)),
+      ],
+    );
+  }
+
   Widget _buildDocumentRow(UnggahBerkasController controller, DocumentSlot slot) {
     return CardContainer(
       child: Column(
@@ -139,16 +178,9 @@ class UnggahBerkasView extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: slot.uploaded
                       ? [
-                          Text(slot.fileName ?? '', style: AppText.semiBold.copyWith(fontSize: 12, color: Colors.black)),
+                          Text(slot.fileName ?? slot.title, style: AppText.semiBold.copyWith(fontSize: 12, color: Colors.black)),
                           const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Text('${slot.fileSize} · ', style: AppText.regular.copyWith(fontSize: 10, color: AppColors.disabled)),
-                              SvgPicture.asset('assets/icons/check_one.svg', width: 12, height: 12),
-                              const SizedBox(width: 4),
-                              Text('Berhasil diunggah', style: AppText.medium.copyWith(fontSize: 10, color: const Color(0xFF008236))),
-                            ],
-                          ),
+                          _buildStatusRow(slot),
                         ]
                       : [
                           Text(slot.subtitle, style: AppText.regular.copyWith(fontSize: 12, color: AppColors.disabled)),

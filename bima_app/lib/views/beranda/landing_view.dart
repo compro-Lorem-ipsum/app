@@ -92,7 +92,14 @@ class LandingView extends StatelessWidget {
           ],
         ),
         GestureDetector(
-          onTap: () => Get.toNamed('/profile-saya'),
+          // await lalu refresh - LandingController tidak ter-dispose saat
+          // Profil Saya dibuka di atasnya (masih di stack navigasi bawah),
+          // jadi titik merah dokumen tidak otomatis update tanpa ini kalau
+          // user baru saja melengkapi dokumen lalu kembali ke Beranda.
+          onTap: () async {
+            await Get.toNamed('/profile-saya');
+            controller.loadDocumentsStatus();
+          },
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -101,19 +108,23 @@ class LandingView extends StatelessWidget {
                 backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                 child: const Icon(Icons.person, color: AppColors.primary, size: 30),
               ),
-              Positioned(
-                right: -2,
-                top: -2,
-                child: Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 2),
+              // Titik merah = dokumen (KTP/BPJS/NPWP) belum lengkap. Null
+              // (belum diketahui) dianggap seperti belum lengkap supaya
+              // tidak sempat "berkedip hilang" keliru sebelum fetch selesai.
+              if (controller.documentsComplete.value != true)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
         ),

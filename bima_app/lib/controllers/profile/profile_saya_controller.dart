@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import '../../services/attendance_summary_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/documents_service.dart';
 import '../../services/panic_alert_polling_service.dart';
 import '../../services/satpam_profile_service.dart';
 import 'tambah_kontak_darurat_controller.dart';
@@ -25,10 +26,6 @@ class ProfileSayaController extends GetxController {
   // mana yang perempuan — dipetakan dari contoh respons GET /satpam/me
   // yang tersedia ("Alma" -> gender "2").
   static const _genderLabels = {'1': 'Laki - laki', '2': 'Perempuan'};
-
-  /// Ketiga tipe dokumen wajib — sama seperti UnggahBerkasController
-  /// (lib/controllers/dokumen/unggah_berkas_controller.dart).
-  static const _requiredDocumentTypes = ['ktp', 'bpjs', 'npwp'];
 
   final documentsComplete = false.obs;
 
@@ -52,26 +49,11 @@ class ProfileSayaController extends GetxController {
     loadDocumentsStatus();
   }
 
-  /// GET /documents/ — dipakai juga oleh UnggahBerkasController. Banner
-  /// "Lengkapi Dokumen" hanya boleh tampil kalau salah satu dari ketiga
-  /// tipe wajib (KTP/BPJS/NPWP) BELUM ada di respons ini.
+  /// Lihat DocumentsService untuk arti "lengkap" (ketiga tipe wajib ADA
+  /// dan lolos validasi VALID). Banner "Lengkapi Dokumen" hanya boleh
+  /// hilang kalau ini true.
   Future<void> loadDocumentsStatus() async {
-    try {
-      final token = await AuthService().getAccessToken();
-      final response = await GetConnect().get(
-        '$_baseApiUrl/documents/',
-        headers: (token != null && token.isNotEmpty) ? {'Authorization': 'Bearer $token'} : null,
-      );
-
-      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = ok && response.body is Map ? response.body['data'] : null;
-      if (data is! List) return;
-
-      final uploadedTypes = data.whereType<Map>().map((doc) => doc['type']?.toString()).toSet();
-      documentsComplete.value = _requiredDocumentTypes.every(uploadedTypes.contains);
-    } catch (e) {
-      debugPrint('ProfileSayaController: gagal memuat status dokumen: $e');
-    }
+    documentsComplete.value = await DocumentsService().isComplete() ?? false;
   }
 
   Future<void> loadAttendanceSummary() async {

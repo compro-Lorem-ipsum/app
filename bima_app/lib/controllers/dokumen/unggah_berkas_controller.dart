@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/documents_service.dart';
 import '../../widgets/success_screen.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
@@ -28,6 +29,10 @@ class DocumentSlot {
   String? fileSize;
   String? filePath;
 
+  /// VALID/PENDING/INVALID dari `file.status` (lihat DocumentsService) —
+  /// null untuk slot yang belum ada dokumennya sama sekali.
+  String? fileStatus;
+
   DocumentSlot({
     required this.key,
     required this.title,
@@ -37,6 +42,7 @@ class DocumentSlot {
     this.fileName,
     this.fileSize,
     this.filePath,
+    this.fileStatus,
   });
 
   bool get isPdf => fileName?.toLowerCase().endsWith('.pdf') ?? false;
@@ -68,32 +74,52 @@ class UnggahBerkasController extends GetxController {
     return token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : {};
   }
 
-  Future<void> _fetchExistingDocuments() async {
-    try {
-      final response = await GetConnect().get('$BASE_API_URL/documents/', headers: await _authHeader());
-      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = ok && response.body is Map ? response.body['data'] : null;
-      if (data is! List) return;
+  /// [preserveLocalFileInfo]: true saat dipanggil sesaat setelah [upload]
+  /// berhasil — supaya nama file & ukuran hasil pilih lokal yang baru saja
+  /// ditampilkan tidak ditimpa balik jadi null (backend tidak mengirim
+  /// nama file asli / ukuran byte, cuma `file.view_url` bertipe signed
+  /// GCS URL dengan nama objek berupa UUID). Panggilan awal di [onInit]
+  /// tetap false supaya dokumen yang sudah ada dari server (belum pernah
+  /// diunggah sesi ini) dapat nama tampilan dari [_fileNameFromUrl].
+  Future<void> _fetchExistingDocuments({bool preserveLocalFileInfo = false}) async {
+    final docs = await DocumentsService().fetchAll();
+    if (docs == null) return;
 
-      for (final doc in data.whereType<Map>()) {
-        final type = doc['type']?.toString();
-        DocumentSlot? slot;
-        for (final s in slots) {
-          if (s.key == type) {
-            slot = s;
-            break;
-          }
+    for (final doc in docs) {
+      final type = doc['type']?.toString();
+      DocumentSlot? slot;
+      for (final s in slots) {
+        if (s.key == type) {
+          slot = s;
+          break;
         }
-        if (slot == null) continue;
-
-        slot.uploaded = true;
-        slot.documentUuid = doc['uuid']?.toString();
-        final path = doc['document_path']?.toString() ?? '';
-        slot.fileName = path.isEmpty ? null : path.split('/').last;
       }
-      slots.refresh();
-    } catch (e) {
-      debugPrint('UnggahBerkasController: gagal ambil dokumen tersimpan: $e');
+      if (slot == null) continue;
+
+      final file = doc['file'] is Map ? Map<String, dynamic>.from(doc['file'] as Map) : null;
+      if (file == null) continue;
+
+      slot.uploaded = true;
+      slot.documentUuid = doc['uuid']?.toString();
+      slot.fileStatus = file['status']?.toString();
+      if (!preserveLocalFileInfo) {
+        slot.fileSize = null;
+        slot.fileName = _fileNameFromUrl(file['view_url']?.toString());
+      }
+    }
+    slots.refresh();
+  }
+
+  /// Backend tidak mengirim nama file asli — ambil segmen terakhir path
+  /// signed URL-nya (mis. `.../25bbe233-....jpg`) sebagai gantinya, cukup
+  /// untuk menebak ekstensi (lihat DocumentSlot.isPdf) dan tampil di UI.
+  String? _fileNameFromUrl(String? url) {
+    if (url == null || url.isEmpty) return null;
+    try {
+      final last = Uri.parse(url).path.split('/').last;
+      return last.isEmpty ? null : last;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -153,7 +179,7 @@ class UnggahBerkasController extends GetxController {
       final saveHeaders = await _authHeader();
       saveHeaders['Content-Type'] = 'application/json';
       final saveResponse = await GetConnect().post(
-        '$BASE_API_URL/documents/',
+        '$BASE_API_URL/documents',
         {'type': slot.key, 'object_uuid': objectUuid},
         headers: saveHeaders,
       );
@@ -169,8 +195,11 @@ class UnggahBerkasController extends GetxController {
       slot.fileSize = _formatFileSize(picked.size);
       slots.refresh();
 
-      // Sinkronkan documentUuid dari backend (dibutuhkan untuk hapus nanti).
-      await _fetchExistingDocuments();
+      // Sinkronkan documentUuid & fileStatus dari backend (dibutuhkan
+      // untuk hapus nanti, dan supaya status VALID/PENDING/INVALID
+      // terlihat begitu Cloud Function selesai mengecek) — tanpa
+      // menimpa nama/ukuran file lokal yang baru saja ditampilkan.
+      await _fetchExistingDocuments(preserveLocalFileInfo: true);
     } catch (e) {
       debugPrint('UnggahBerkasController: gagal unggah dokumen ${slot.key}: $e');
       _showError('Gagal Mengunggah', 'Tidak dapat terhubung ke server. Periksa koneksi Anda dan coba lagi.');
@@ -249,6 +278,7 @@ class UnggahBerkasController extends GetxController {
     slot.fileName = null;
     slot.fileSize = null;
     slot.filePath = null;
+    slot.fileStatus = null;
     slots.refresh();
   }
 

@@ -15,6 +15,7 @@
 import 'package:get/get.dart';
 
 import '../../services/attendance_summary_service.dart';
+import '../../services/documents_service.dart';
 import '../../services/satpam_profile_service.dart';
 import '../../services/tracking_service.dart';
 import '../pengumuman/pengumuman_controller.dart';
@@ -25,6 +26,11 @@ class LandingController extends GetxController {
   final profile = Rxn<Map<String, dynamic>>();
   final workingHours = Rxn<Map<String, dynamic>>();
   final todayAttendance = Rxn<Map<String, dynamic>>();
+
+  /// Null = belum diketahui (anggap seperti belum lengkap, jangan
+  /// sembunyikan titik merah); false = belum lengkap; true = lengkap.
+  /// Dipakai avatar di header Beranda — lihat _buildHeader di landing_view.dart.
+  final documentsComplete = Rxn<bool>();
 
   late final PesanController pesanController = Get.isRegistered<PesanController>()
       ? Get.find<PesanController>()
@@ -40,11 +46,16 @@ class LandingController extends GetxController {
     refreshStatus();
     loadProfile();
     loadAttendanceSummary();
+    loadDocumentsStatus();
     // Baca instance-nya sekali di sini supaya lazy getter di atas langsung
     // trigger fetch (fetchMessages/fetchAnnouncements) begitu Beranda dibuka,
     // bukan menunggu widget pertama yang mengaksesnya.
     pesanController;
     pengumumanController;
+  }
+
+  Future<void> loadDocumentsStatus() async {
+    documentsComplete.value = await DocumentsService().isComplete();
   }
 
   Future<void> refreshStatus() async {
