@@ -40,10 +40,20 @@ const String kGpsHeartbeatTask = 'gps_heartbeat_task';
 const String kPanicAlertHeartbeatTask = 'panic_alert_heartbeat_task';
 
 // Harus fungsi top-level (bukan method), dijalankan WorkManager di isolate
-// terpisah dari isolate utama aplikasi.
+// terpisah dari isolate utama aplikasi — isolate ini TIDAK menjalankan
+// main() sehingga dotenv belum pernah di-load di sini; wajib di-load
+// ulang di setiap eksekusi sebelum baca BASE_API_URL (dipakai
+// _runPanicAlertHeartbeat), kalau tidak dotenv.env melempar
+// NotInitializedError.
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
+    try {
+      await dotenv.load(fileName: '.env');
+    } catch (e) {
+      debugPrint('WorkManager: gagal load .env (diabaikan): $e');
+    }
+
     if (task == kGpsHeartbeatTask) {
       await _runGpsHeartbeat();
     } else if (task == kPanicAlertHeartbeatTask) {
