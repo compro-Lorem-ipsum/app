@@ -34,7 +34,7 @@ class ProfileSayaView extends StatelessWidget {
                   children: [
                     _buildHeader(),
                     const SizedBox(height: 16),
-                    _buildProfileCard(),
+                    Obx(() => _buildProfileCard(controller)),
                     const SizedBox(height: 12),
                     _buildStatsCard(),
                     const SizedBox(height: 12),
@@ -42,15 +42,15 @@ class ProfileSayaView extends StatelessWidget {
                     const SizedBox(height: 20),
                     const Text('Data Personel', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black)),
                     const SizedBox(height: 8),
-                    _buildDataPersonelCard(),
+                    Obx(() => _buildDataPersonelCard(controller)),
                     const SizedBox(height: 20),
                     const Text('Penugasan', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black)),
                     const SizedBox(height: 8),
-                    _buildPenugasanCard(),
+                    Obx(() => _buildPenugasanCard(controller)),
                     const SizedBox(height: 20),
                     const Text('Kontak', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black)),
                     const SizedBox(height: 8),
-                    _buildKontakCard(),
+                    Obx(() => _buildKontakCard(controller)),
                     const SizedBox(height: 20),
                     const Text('Kontak Darurat', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black)),
                     const SizedBox(height: 8),
@@ -81,19 +81,19 @@ class ProfileSayaView extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileCard() {
+  Widget _buildProfileCard(ProfileSayaController controller) {
     return CardContainer(
       child: Row(
         children: [
           const CircleAvatar(radius: 30, backgroundColor: Color(0xFFEBEFFF), child: Icon(Icons.person, color: primaryColor, size: 34)),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Nama Satpam', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black)),
-                SizedBox(height: 4),
-                Text('Jabatan · NIP 123xxx', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                Text(controller.displayNama, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black)),
+                const SizedBox(height: 4),
+                Text('${controller.displayJabatan} · NIP ${controller.displayNip}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
               ],
             ),
           ),
@@ -203,29 +203,28 @@ class ProfileSayaView extends StatelessWidget {
     );
   }
 
-  Widget _buildDataPersonelCard() {
+  Widget _buildDataPersonelCard(ProfileSayaController controller) {
     return CardContainer(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _buildInfoRow('assets/icons/nip_icon.svg', 'NIP', '123xxxx'),
-          _buildInfoRow('assets/icons/nrg_icon.svg', 'NRG', '123xxxx'),
-          _buildInfoRow('assets/icons/pangkat_icon.svg', 'Pangkat', 'Anggota'),
-          _buildInfoRow('assets/icons/gender_male_icon.svg', 'Jenis Kelamin', 'Laki - laki'),
-          _buildInfoRow('assets/icons/location_icon.svg', 'Asal Daerah', 'Ngawi, Jaw Timur', isLast: true, iconWidth: 16),
+          _buildInfoRow('assets/icons/nip_icon.svg', 'NIP', controller.displayNip),
+          _buildInfoRow('assets/icons/nrg_icon.svg', 'NRG', controller.displayNrg),
+          _buildInfoRow('assets/icons/pangkat_icon.svg', 'Pangkat', controller.displayJabatan),
+          _buildInfoRow('assets/icons/gender_male_icon.svg', 'Jenis Kelamin', controller.displayGender),
+          _buildInfoRow('assets/icons/location_icon.svg', 'Asal Daerah', controller.displayAsalDaerah, isLast: true, iconWidth: 16),
         ],
       ),
     );
   }
 
-  Widget _buildPenugasanCard() {
+  Widget _buildPenugasanCard(ProfileSayaController controller) {
     return CardContainer(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _buildStackedInfoRow('assets/icons/mitra_icon.svg', 'Mitra', 'Nama Mitra'),
-          _buildStackedInfoRow('assets/icons/home_pos_icon.svg', 'Nama Pos Utama', 'Pos Utama Gd. A -Lobby'),
-          _buildStackedInfoRow('assets/icons/penempatan_icon.svg', 'Tanggal Penempatan', '01 Desember 2026', isLast: true),
+          _buildStackedInfoRow('assets/icons/mitra_icon.svg', 'Mitra', controller.displayClient),
+          _buildStackedInfoRow('assets/icons/penempatan_icon.svg', 'Tanggal Penempatan', controller.displayDateAssigned, isLast: true),
         ],
       ),
     );
@@ -254,13 +253,13 @@ class ProfileSayaView extends StatelessWidget {
     );
   }
 
-  Widget _buildKontakCard() {
+  Widget _buildKontakCard(ProfileSayaController controller) {
     return CardContainer(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _buildInfoRow('assets/icons/telp_icon.svg', 'No. Telp', '+62 8xx-xxxx-xxxx'),
-          _buildInfoRow('assets/icons/email_icon.svg', 'Email', 'nama@gmail.com', isLast: true),
+          _buildInfoRow('assets/icons/telp_icon.svg', 'No. Telp', controller.displayKontakUtama),
+          _buildInfoRow('assets/icons/email_icon.svg', 'Email', controller.displayEmail, isLast: true),
         ],
       ),
     );
