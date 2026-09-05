@@ -269,16 +269,20 @@ class TrackingService {
     unawaited(_flushOnce());
   }
 
-  /// Sudahi tracking untuk shift ini (dipanggil setelah check-out sukses).
+  /// Sudahi tracking untuk shift ini (dipanggil setelah check-out sukses,
+  /// setelah flushForCheckout() sudah dicoba).
   ///
-  /// MODE FALLBACK: selain menghentikan foreground service, ini juga
-  /// mengosongkan SELURUH antrian lokal (synced maupun belum). Idealnya
-  /// titik yang gagal terkirim dipertahankan untuk di-retry, tapi karena
-  /// endpoint batch belum tersedia di backend DAN setiap shift masih
-  /// memakai `absensi_uuid` placeholder yang sama, titik gagal yang
-  /// dibiarkan nyantol akan ikut kebawa ke rute shift berikutnya. Setelah
-  /// backend & uuid per-sesi sungguhan tersedia, ganti ini dengan retry
-  /// yang mempertahankan titik gagal per sesi.
+  /// Kalau masih ada titik yang gagal ter-flush di titik ini, mereka
+  /// SENGAJA dibuang di sini, bukan di-retry di background. Dokumentasi
+  /// GPS tracking internal menyebut `retryLeftoverSync()` (backoff
+  /// eksponensial pasca check-out) untuk kasus ini, tapi itu ditulis untuk
+  /// endpoint lama yang menerima uuid sesi eksplisit di URL. Kontrak
+  /// `POST /attendance/tracking` yang sekarang dipakai mensyaratkan sesi
+  /// absensi masih TERBUKA (409 `NO_ACTIVE_SESSION` kalau tidak) — begitu
+  /// check-out sukses, sesi itu sudah tertutup di server, jadi retry di
+  /// sini tidak pernah bisa berhasil. Kalau backend suatu saat menyediakan
+  /// cara mengirim titik susulan untuk sesi yang sudah ditutup, retry di
+  /// sini baru masuk akal untuk dibangun.
   Future<void> stopTracking() async {
     await pauseCapture();
     _isTracking = false;
