@@ -158,15 +158,16 @@ class AbsenCheckinController extends GetxController {
 
     isSubmitting.value = true;
     try {
-      // Saat check-out: hentikan capture, ambil titik penutup, lalu kirim
-      // semua titik yang masih tertunda sebagai satu polyline (POST
-      // /attendance/tracking) SEBELUM submit check-out — endpoint itu
-      // mensyaratkan sesi absensi masih terbuka. Kegagalan flush tidak
-      // menghentikan check-out; titik yang gagal tetap tersimpan lokal.
+      // Saat check-out: hentikan capture, ambil titik penutup, lalu rangkai
+      // SELURUH titik shift ini (bukan cuma yang baru) jadi satu polyline
+      // untuk disisipkan langsung ke body check-out — kontrak backend
+      // mengganti (replace) seluruh rute tersimpan setiap kali menerima
+      // polyline baru, jadi yang dikirim harus rute lengkap.
+      String? trackPolyline;
       if (!isCheckIn) {
         await TrackingService().pauseCapture();
         await TrackingService().captureFinalPoint();
-        await TrackingService().flushForCheckout();
+        trackPolyline = await TrackingService().buildCheckoutPolyline();
       }
 
       final token = await AuthService().getAccessToken();
@@ -184,6 +185,7 @@ class AbsenCheckinController extends GetxController {
           'lng': longitude.value,
           'object_uuid': objectUuid,
           'accuracy_m': accuracyMeter.value,
+          if (trackPolyline != null) 'polyline': trackPolyline,
         },
         headers: {
           'Authorization': 'Bearer $token',

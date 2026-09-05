@@ -1,7 +1,9 @@
-// Antrian lokal titik GPS (SQLite, tabel `gps_queue`) sebelum dikirim
-// sekaligus (batch) ke server saat check-out. Setiap titik disimpan dulu
-// di device dan baru ditandai `synced` setelah benar-benar terkirim —
-// lihat tracking_service.dart untuk alur penangkapan & pengiriman batch-nya.
+// Antrian lokal titik GPS (SQLite, tabel `gps_queue`) selama satu shift
+// berlangsung. Seluruh titik satu sesi (bukan cuma yang "belum terkirim")
+// dirangkai jadi satu polyline dan dikirim sebagai bagian body check-out —
+// lihat TrackingService.buildCheckoutPolyline() — karena kontrak backend
+// mengganti (replace) seluruh rute tersimpan setiap kali menerima polyline
+// baru, bukan menambahkannya.
 
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -76,16 +78,9 @@ class QueueService {
     return db.insert('gps_queue', point.toMap());
   }
 
-  /// Titik yang belum berhasil terkirim ke server, urut dari yang paling lama.
-  Future<List<GpsPoint>> getPending() async {
-    final db = await _database;
-    final rows = await db.query('gps_queue', where: 'synced = 0', orderBy: 'recorded_at ASC');
-    return rows.map(GpsPoint.fromMap).toList();
-  }
-
-  /// Semua titik (synced maupun belum) untuk satu sesi absensi, dipakai
-  /// untuk keperluan debugging (lihat `TrackingService.exportDebugMap`) —
-  /// bukan untuk proses pengiriman batch.
+  /// Semua titik satu sesi absensi (urut waktu) — dipakai baik untuk
+  /// merangkai polyline check-out (TrackingService.buildCheckoutPolyline)
+  /// maupun untuk debug map (TrackingService.exportDebugMap).
   Future<List<GpsPoint>> getAllForSession(String absensiUuid) async {
     final db = await _database;
     final rows = await db.query(
@@ -95,14 +90,6 @@ class QueueService {
       orderBy: 'recorded_at ASC',
     );
     return rows.map(GpsPoint.fromMap).toList();
-  }
-
-  /// Tandai sekumpulan titik sudah berhasil dikirim (server menerimanya).
-  Future<void> markSynced(List<int> ids) async {
-    if (ids.isEmpty) return;
-    final db = await _database;
-    final placeholders = List.filled(ids.length, '?').join(',');
-    await db.update('gps_queue', {'synced': 1}, where: 'id IN ($placeholders)', whereArgs: ids);
   }
 
   /// Tempel `absensi_uuid` ke titik-titik yang belum punya, dipakai supaya
@@ -116,12 +103,9 @@ class QueueService {
     );
   }
 
-  /// Kosongkan seluruh antrian lokal, synced maupun belum. Dipanggil setelah
-  /// check-out (lihat TrackingService.stopTracking) — MODE FALLBACK: karena
-  /// endpoint batch belum tersedia di backend, titik yang gagal terkirim
-  /// tidak ada gunanya dipertahankan sampai sesi berikutnya (malah bikin
-  /// rute sesi lama ikut kebawa ke sesi baru, karena keduanya masih memakai
-  /// `absensi_uuid` placeholder yang sama).
+  /// Kosongkan seluruh antrian lokal. Dipanggil dari TrackingService
+  /// setelah check-out (dan polyline-nya) sukses terkirim ke server —
+  /// lihat TrackingService.stopTracking.
   Future<void> clearAll() async {
     final db = await _database;
     await db.delete('gps_queue');

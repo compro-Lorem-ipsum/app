@@ -1,8 +1,18 @@
 // Merekam posisi GPS satpam selama masa "bertugas" dan menyimpannya secara
-// lokal (lihat queue_service.dart), lalu mengirim semuanya sekaligus
-// (batch, sebagai satu encoded polyline) tepat sebelum check-out — bukan
-// real-time — karena rute baru diproses backend setelah check-out (lihat
-// dokumentasi GPS Tracking).
+// lokal (lihat queue_service.dart). Rute dikirim ke server sebagai satu
+// polyline ter-encode langsung di dalam body `POST /attendance/check-out`
+// (field `polyline`, lihat absen_checkin_controller.dart) — bukan lewat
+// panggilan terpisah, dan bukan real-time.
+//
+// PENTING — semantik REPLACE, bukan APPEND: kontrak backend menyimpan
+// polyline yang dikirim APA ADANYA sebagai rute mentah (mengganti apa pun
+// yang tersimpan sebelumnya), bukan menambahkannya ke rute lama. Karena
+// itu, setiap kali rute dikirim harus berisi SELURUH titik shift ini sejak
+// check-in — bukan cuma titik baru — supaya check-out yang di-retry
+// (mis. gagal jaringan lalu dicoba lagi) tidak pernah kehilangan bagian
+// rute. Ini juga kenapa tidak ada konsep "titik gagal ter-sync yang perlu
+// di-retry terpisah": selama titiknya masih ada di antrian lokal, check-out
+// berikutnya (kapan pun) otomatis mengirim ulang rute lengkap.
 //
 // Empat lapis ketahanan: (1) GPS stream sebagai sumber utama, (2) timer
 // fallback yang memakai getLastKnownPosition kalau stream diam, dan
@@ -11,30 +21,15 @@
 // isolate utama, supaya tetap hidup walau layar mati/aplikasi di-minimize.
 // (4) WorkManager (lihat workmanager_callback.dart) sebagai heartbeat
 // tambahan kalau OEM tertentu tetap membunuh foreground service ini.
-//
-// Kontrak backend (POST /attendance/tracking) menerima segmen rute sebagai
-// SATU string `polyline` (format Google Encoded Polyline Algorithm), bukan
-// array titik mentah — lihat _encodePolyline di bawah. Endpoint ini
-// mensyaratkan sesi absensi masih terbuka (409 NO_ACTIVE_SESSION kalau
-// tidak ada check-in aktif), jadi flush hanya berarti dilakukan SEBELUM
-// check-out selesai, bukan sesudahnya.
-//
-// MODE FALLBACK: kalau pengiriman gagal (backend tidak terjangkau, atau
-// sesi absensi ternyata sudah tidak terbuka), titik TETAP tersimpan aman
-// di antrian lokal (tidak ditandai synced) dan proses check-out tetap
-// boleh lanjut — lihat catatan MODE FALLBACK di stopTracking().
 
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'auth_service.dart';
 import 'gps_task_handler.dart';
 import 'queue_service.dart';
 import 'tracking_prefs_keys.dart';
@@ -68,11 +63,6 @@ class TrackingService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeyOnDuty, true);
     await prefs.setString(_prefKeyAbsensiUuid, absensiUuid);
-
-    // Sisa antrian shift SEBELUMNYA yang belum sempat ter-flush (mis. tidak
-    // ada internet persis saat checkout) dibersihkan di background, tanpa
-    // menunda mulainya tracking shift baru ini.
-    unawaited(flushLeftoverInBackground());
 
     await _ensurePermissions();
     _initForegroundTask();
@@ -172,65 +162,27 @@ class TrackingService {
     }
   }
 
-  /// Kirim semua titik yang masih tertunda ke server sekaligus (sebagai
-  /// satu polyline), dipanggil tepat SEBELUM submit check-out (selagi
-  /// sesi absensi masih terbuka). `true` = flush berhasil (atau memang
-  /// tidak ada sisa), `false` = masih ada titik gagal terkirim (mis.
-  /// backend tidak terjangkau) — pemanggil tetap boleh lanjut check-out;
-  /// titik yang gagal tetap tersimpan lokal.
-  Future<bool> flushForCheckout() async {
-    final ok = await _flushOnce();
-    if (ok) return true;
-    // Sesuai dokumentasi: kalau gagal, di-retry sekali secara inline
-    // sebelum menyerah dan membiarkan checkout tetap lanjut.
-    return _flushOnce();
+  /// Rangkai SELURUH titik shift ini (sejak check-in, bukan cuma yang
+  /// terbaru) menjadi satu string polyline ter-encode, untuk disisipkan
+  /// langsung ke field `polyline` pada body `POST /attendance/check-out`.
+  /// Null kalau tidak ada titik GPS sama sekali untuk shift ini — pemanggil
+  /// cukup tidak menyertakan field `polyline` sama sekali di request-nya
+  /// (mengosongkan field itu artinya "rute tersimpan dibiarkan apa
+  /// adanya", BUKAN "hapus rute", sesuai dokumentasi).
+  Future<String?> buildCheckoutPolyline() async {
+    final prefs = await SharedPreferences.getInstance();
+    final absensiUuid = prefs.getString(_prefKeyAbsensiUuid);
+    if (absensiUuid == null) return null;
+
+    final points = await QueueService().getAllForSession(absensiUuid);
+    if (points.isEmpty) return null;
+
+    return _encodePolyline(points);
   }
 
-  Future<bool> _flushOnce() async {
-    final pending = await QueueService().getPending();
-    if (pending.isEmpty) return true;
-
-    try {
-      final token = await AuthService().getAccessToken();
-      if (token == null || token.isEmpty) {
-        debugPrint('TrackingService: tidak ada sesi login tersimpan, lewati flush.');
-        return false;
-      }
-
-      final baseUrl = dotenv.env['BASE_API_URL'];
-      final polyline = _encodePolyline(pending);
-
-      final response = await GetConnect()
-          .post(
-            '$baseUrl/attendance/tracking',
-            {'polyline': polyline},
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-          )
-          .timeout(const Duration(seconds: 10));
-
-      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      if (ok) {
-        await QueueService().markSynced(pending.map((p) => p.id!).toList());
-        return true;
-      }
-      debugPrint('TrackingService: flush ditolak server (status ${response.statusCode}, body ${response.body})');
-      return false;
-    } catch (e) {
-      // MODE FALLBACK (backend tidak terjangkau, dsb.): titik tetap aman
-      // di antrian lokal, tapi karena tidak sempat tersimpan di server,
-      // cache ini akan dibuang begitu saja di stopTracking() begitu shift
-      // ini selesai (lihat catatan di sana).
-      debugPrint('TrackingService: flush gagal, mode offline/testing: $e');
-      return false;
-    }
-  }
-
-  /// Rangkai seluruh titik tertunda (urut waktu) menjadi satu string
-  /// polyline ter-encode — format Google Encoded Polyline Algorithm,
-  /// presisi 5 desimal, sesuai kontrak `POST /attendance/tracking`.
+  /// Format Google Encoded Polyline Algorithm, presisi 5 desimal, sesuai
+  /// kontrak `polyline` pada `POST /attendance/check-out` dan
+  /// `POST /attendance/tracking`.
   String _encodePolyline(List<GpsPoint> points) {
     final buffer = StringBuffer();
     var lastLat = 0;
@@ -257,32 +209,13 @@ class TrackingService {
     buffer.writeCharCode(v + 63);
   }
 
-  /// Kirim sisa antrian dari shift SEBELUMNYA yang belum ter-flush,
-  /// dipanggil fire-and-forget dari startTracking() supaya tidak menunda
-  /// mulainya tracking shift baru. Kalau shift sebelumnya sudah check-out,
-  /// sesi absensinya sudah tertutup di server — percobaan ini wajar gagal
-  /// dengan `NO_ACTIVE_SESSION` dan titiknya tetap dibuang di stopTracking().
-  Future<void> flushLeftoverInBackground() async {
-    final prefs = await SharedPreferences.getInstance();
-    final absensiUuid = prefs.getString(_prefKeyAbsensiUuid);
-    if (absensiUuid == null) return;
-    unawaited(_flushOnce());
-  }
-
   /// Sudahi tracking untuk shift ini (dipanggil setelah check-out sukses,
-  /// setelah flushForCheckout() sudah dicoba).
-  ///
-  /// Kalau masih ada titik yang gagal ter-flush di titik ini, mereka
-  /// SENGAJA dibuang di sini, bukan di-retry di background. Dokumentasi
-  /// GPS tracking internal menyebut `retryLeftoverSync()` (backoff
-  /// eksponensial pasca check-out) untuk kasus ini, tapi itu ditulis untuk
-  /// endpoint lama yang menerima uuid sesi eksplisit di URL. Kontrak
-  /// `POST /attendance/tracking` yang sekarang dipakai mensyaratkan sesi
-  /// absensi masih TERBUKA (409 `NO_ACTIVE_SESSION` kalau tidak) — begitu
-  /// check-out sukses, sesi itu sudah tertutup di server, jadi retry di
-  /// sini tidak pernah bisa berhasil. Kalau backend suatu saat menyediakan
-  /// cara mengirim titik susulan untuk sesi yang sudah ditutup, retry di
-  /// sini baru masuk akal untuk dibangun.
+  /// yaitu setelah polyline dari buildCheckoutPolyline() sudah terkirim
+  /// sebagai bagian body check-out). Aman mengosongkan seluruh antrian
+  /// lokal di sini karena rute lengkapnya sudah tersimpan di server —
+  /// kalau check-out itu sendiri gagal, fungsi ini tidak pernah dipanggil,
+  /// jadi titik GPS tidak ikut hilang dan otomatis ikut terkirim lagi
+  /// (lengkap) di percobaan check-out berikutnya.
   Future<void> stopTracking() async {
     await pauseCapture();
     _isTracking = false;
