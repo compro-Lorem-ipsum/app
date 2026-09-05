@@ -25,6 +25,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import '../../services/fcm_service.dart';
 import 'register_akun_upload_foto_controller.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
@@ -198,6 +199,13 @@ class RegisterAkunPart4Controller extends GetxController {
       }
 
       submitStatus.value = 'Mendaftar...';
+      // fid+platform opsional (keduanya atau tidak sama sekali) - satpam
+      // yang masih pending belum bisa login jadi belum bisa memanggil
+      // POST /notifications/register sendiri; klaim device dilakukan di
+      // sini supaya begitu admin memutuskan, notifikasinya ada tempat
+      // untuk mendarat. Null (mis. Play Services bermasalah) tidak
+      // menghalangi pendaftaran akun tetap berjalan.
+      final deviceFields = await FcmService().currentDeviceFields();
       final payload = {
         'nama': _previousData['namaLengkap'],
         'nip': _previousData['nip'],
@@ -208,6 +216,7 @@ class RegisterAkunPart4Controller extends GetxController {
         'jabatan': _previousData['jabatan'],
         'password': password,
         'object_uuid': avatarObjectUuid,
+        if (deviceFields != null) ...deviceFields,
       };
 
       final response = await GetConnect().post(

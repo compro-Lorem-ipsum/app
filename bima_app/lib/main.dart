@@ -3,12 +3,15 @@
 // fitur (auth, beranda, absensi, patroli, panic, dst) yang strukturnya
 // mengikuti folder lib/controllers dan lib/views.
 
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'services/auth_service.dart';
+import 'services/fcm_service.dart';
 import 'services/panic_alert_notification_service.dart';
 import 'services/panic_alert_polling_service.dart';
 
@@ -75,6 +78,13 @@ Future<void> main() async {
   // di isolate/FlutterEngine foreground service terpisah.
   FlutterForegroundTask.initCommunicationPort();
 
+  // Push notification (FCM) - lihat services/fcm_service.dart. Handler
+  // background HARUS didaftarkan di sini, sebelum runApp, supaya Firebase
+  // tahu fungsi mana yang dipanggil di isolate terpisah saat pesan masuk
+  // ketika app di background/killed.
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
   // Kalau sesi login sebelumnya tidak dicentang "Ingat Saya", hapus di sini
   // supaya cold-start ini kembali minta login (lihat AuthService).
   await AuthService().clearSessionIfNotRemembered();
@@ -100,6 +110,11 @@ Future<void> main() async {
   // lokasi setelah frame pertama selesai (lihat _MyAppState.initState).
   await PanicAlertNotificationService().init();
   final pendingPayload = isLoggedIn ? await PanicAlertNotificationService().getLaunchPayload() : null;
+
+  // Terlepas dari status login - keputusan registrasi (disetujui/ditolak)
+  // bisa masuk sebelum satpam sempat login pertama kali. Kalau sesi login
+  // sudah ada, token FCM saat ini juga langsung didaftarkan ulang di sini.
+  await FcmService().init();
 
   runApp(MyApp(initialRoute: isLoggedIn ? '/' : '/login', pendingNotificationPayload: pendingPayload));
 }

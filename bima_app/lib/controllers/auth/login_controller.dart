@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/fcm_service.dart';
 import '../../services/panic_alert_polling_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
@@ -125,6 +126,11 @@ class LoginController extends GetxController {
         // Mulai polling Panic Alert (lihat panic_alert_polling_service.dart)
         // — dihentikan lagi saat logout (ProfileSayaController.logout).
         await PanicAlertPollingService().start();
+
+        // Daftarkan token FCM sekarang bahwa sudah ada access_token —
+        // sebelum ini (satpam belum login) token hanya sempat terdaftar
+        // lewat POST /satpam/register kalau ada (lihat fcm_service.dart).
+        await FcmService().registerCurrentToken();
 
         Get.offAllNamed('/');
         return;
