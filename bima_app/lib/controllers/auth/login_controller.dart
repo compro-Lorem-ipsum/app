@@ -124,7 +124,7 @@ class LoginController extends GetxController {
 
         // Mulai polling Panic Alert (lihat panic_alert_polling_service.dart)
         // — dihentikan lagi saat logout (ProfileSayaController.logout).
-        PanicAlertPollingService().start();
+        await PanicAlertPollingService().start();
 
         Get.offAllNamed('/');
         return;

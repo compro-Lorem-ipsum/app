@@ -14,6 +14,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- Wajib sejak Android 13 (API 33) untuk menampilkan notifikasi apa
+         pun, termasuk notifikasi Panic Alert dari heartbeat WorkManager
+         background (lihat workmanager_callback.dart). Izin runtime-nya
+         diminta lewat FlutterForegroundTask.requestNotificationPermission()
+         di PanicAlertPollingService.start(). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:label="BIMA Absensi Patroli"
         android:name="${applicationName}"

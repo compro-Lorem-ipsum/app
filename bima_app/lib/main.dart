@@ -88,7 +88,7 @@ Future<void> main() async {
   // untuk detail kenapa ini polling, bukan push. Untuk login BARU (bukan
   // sesi tersimpan), start() dipanggil dari LoginController.handleMasuk.
   if (isLoggedIn) {
-    PanicAlertPollingService().start();
+    await PanicAlertPollingService().start();
   }
 
   runApp(MyApp(initialRoute: isLoggedIn ? '/' : '/login'));

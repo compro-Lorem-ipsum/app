@@ -13,6 +13,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Wajib oleh flutter_local_notifications (notifikasi Panic Alert
+        // dari heartbeat WorkManager background, lihat workmanager_callback.dart).
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -41,4 +44,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Pasangan wajib untuk isCoreLibraryDesugaringEnabled di atas.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
