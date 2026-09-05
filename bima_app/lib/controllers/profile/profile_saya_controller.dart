@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
+import '../../services/attendance_summary_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/panic_alert_polling_service.dart';
 import '../../services/satpam_profile_service.dart';
@@ -35,11 +36,30 @@ class ProfileSayaController extends GetxController {
   final kontakDaruratList = <Map<String, dynamic>>[].obs;
   final isLoadingKontak = true.obs;
 
+  final workingHours = Rxn<Map<String, dynamic>>();
+  final todayAttendance = Rxn<Map<String, dynamic>>();
+
   @override
   void onInit() {
     super.onInit();
     loadProfile();
     loadKontakDarurat();
+    loadAttendanceSummary();
+  }
+
+  Future<void> loadAttendanceSummary() async {
+    workingHours.value = await AttendanceSummaryService().fetchWorkingHours();
+    todayAttendance.value = await AttendanceSummaryService().fetchToday();
+  }
+
+  num? _minutes(String bucket) => (workingHours.value?[bucket] as Map?)?['minutes'] as num?;
+  String get displayDurasiHariIni => AttendanceSummaryService.formatJamMenit(_minutes('today'));
+  String get displayDurasiSemuaWaktu => AttendanceSummaryService.formatJamMenit(_minutes('all_time'));
+  String get displaySejak => AttendanceSummaryService.formatSejak(workingHours.value?['since']?.toString());
+
+  String get displayCheckInHariIniCaption {
+    final jam = AttendanceSummaryService.formatJamCheckIn(todayAttendance.value);
+    return jam == '-' ? 'Belum check-in' : 'Check in $jam';
   }
 
   Future<void> loadProfile() async {

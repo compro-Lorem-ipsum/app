@@ -36,7 +36,7 @@ class ProfileSayaView extends StatelessWidget {
                     const SizedBox(height: 16),
                     Obx(() => _buildProfileCard(controller)),
                     const SizedBox(height: 12),
-                    _buildStatsCard(),
+                    Obx(() => _buildStatsCard(controller)),
                     const SizedBox(height: 12),
                     Obx(() => _buildDocumentsBanner(controller)),
                     const SizedBox(height: 20),
@@ -107,14 +107,14 @@ class ProfileSayaView extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsCard() {
+  Widget _buildStatsCard(ProfileSayaController controller) {
     return CardContainer(
       child: IntrinsicHeight(
         child: Row(
           children: [
-            Expanded(child: _buildClockStat('Hari ini', '8j 23m', 'Check in 07:03')),
+            Expanded(child: _buildClockStat('Hari ini', controller.displayDurasiHariIni, controller.displayCheckInHariIniCaption)),
             const VerticalDivider(color: cardBorderColor, width: 24, thickness: 1),
-            Expanded(child: _buildClockStat('Semua Waktu', '313j 01m', 'Sejak Des 2026')),
+            Expanded(child: _buildClockStat('Semua Waktu', controller.displayDurasiSemuaWaktu, controller.displaySejak)),
           ],
         ),
       ),

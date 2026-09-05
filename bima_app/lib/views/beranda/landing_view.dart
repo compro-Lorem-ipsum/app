@@ -57,7 +57,7 @@ class LandingView extends StatelessWidget {
                     const SizedBox(height: 12),
                     _buildFeatureGrid(features),
                     const SizedBox(height: 24),
-                    _buildStatusHariIniCard(controller),
+                    Obx(() => _buildStatusHariIniCard(controller)),
                     const SizedBox(height: 24),
                     SectionHeader(title: 'Pesan', onSeeAll: () => Get.toNamed('/pesan')),
                     const SizedBox(height: 12),
@@ -134,22 +134,17 @@ class LandingView extends StatelessWidget {
           const SizedBox(height: 4),
           Text(controller.displayClient, style: AppText.semiBold.copyWith(fontSize: 16, color: Colors.black)),
           const SizedBox(height: 12),
-          // TODO: Jam Masuk Shift/Durasi/rekap jam butuh endpoint jadwal &
-          // rekap absensi (mis. GET /attendance/today, GET
-          // /attendance/working-hours) yang belum diselaraskan — lihat
-          // laporan status. Placeholder di bawah SENGAJA dibiarkan '-'
-          // (bukan angka palsu) sampai itu dikerjakan.
           Row(
             children: [
-              Expanded(child: _buildStat('Jam Masuk Shift', '-')),
-              Expanded(child: _buildStat('Durasi Hari ini', '-')),
+              Expanded(child: _buildStat('Jam Masuk Shift', controller.displayJamMasukShift)),
+              Expanded(child: _buildStat('Durasi Hari ini', controller.displayDurasiHariIni)),
             ],
           ),
           Container(margin: const EdgeInsets.symmetric(vertical: 12), height: 1, color: AppColors.cardBorder),
           Row(
             children: [
-              Expanded(child: _buildStat('Bulan ini di Mitra', '-')),
-              Expanded(child: _buildStat('Total di Mitra ini', '-')),
+              Expanded(child: _buildStat('Bulan ini di Mitra', controller.displayDurasiBulanIni)),
+              Expanded(child: _buildStat('Total di Mitra ini', controller.displayDurasiTotal)),
             ],
           ),
         ],
@@ -254,9 +249,9 @@ class LandingView extends StatelessWidget {
             decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0x33122C93)))),
             child: Row(
               children: [
-                Expanded(child: _buildStat('Check - in', '-')),
-                Expanded(child: _buildStat('Check - out', '-')),
-                Expanded(child: _buildStat('Durasi', '-')),
+                Expanded(child: _buildStat('Check - in', controller.displayCheckIn)),
+                Expanded(child: _buildStat('Check - out', controller.displayCheckOut)),
+                Expanded(child: _buildStat('Durasi', controller.displayDurasiStatus)),
               ],
             ),
           ),
