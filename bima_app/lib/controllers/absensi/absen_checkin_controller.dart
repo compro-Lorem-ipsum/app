@@ -4,7 +4,6 @@
 // (3) submit absensi ke API beserta dialog hasil (sukses/gagal).
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
@@ -13,7 +12,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:heroicons/heroicons.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
+import '../../services/auth_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/workmanager_callback.dart';
 import '../../widgets/success_screen.dart';
@@ -21,16 +23,11 @@ import '../../widgets/success_screen.dart';
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
 class AbsenCheckinController extends GetxController {
-  // Placeholder selama belum ada login/session sungguhan dari backend —
-  // dipakai sebagai identitas satpam untuk GPS tracking (lihat
-  // tracking_service.dart). Ganti dengan uuid satpam yang login begitu
-  // autentikasi tersedia.
-  static const String _satpamUuid = 'demo-satpam-uuid';
-
   late final bool isCheckIn;
 
   var latitude = 0.0.obs;
   var longitude = 0.0.obs;
+  var accuracyMeter = 0.0.obs;
   var distanceMeter = 0.0.obs;
   var isInRadius = false.obs;
   var isLoadingLocation = true.obs;
@@ -85,6 +82,7 @@ class AbsenCheckinController extends GetxController {
 
       latitude.value = position.latitude;
       longitude.value = position.longitude;
+      accuracyMeter.value = position.accuracy;
 
       final distance = Geolocator.distanceBetween(
         position.latitude,
@@ -150,78 +148,147 @@ class AbsenCheckinController extends GetxController {
   }
 
   // ===== SUBMIT ABSENSI =====
+  // Kontrak: POST /attendance/upload-url (reserve selfie object) lalu POST
+  // file ke GCS, baru POST /attendance/check-in atau /attendance/check-out
+  // dengan { lat, lng, object_uuid, accuracy_m }. Body strict — field yang
+  // tidak didokumentasikan (mis. gps_incomplete lama) ditolak 422, jadi
+  // tidak dikirim di sini.
   Future<void> confirmAttendance() async {
     if (photoPath.value.isEmpty) return;
 
     isSubmitting.value = true;
-    bool gpsIncomplete = false;
-
     try {
-      // Saat check-out: hentikan capture, ambil titik penutup, lalu kirim
-      // semua titik yang masih tertunda sekaligus (batch) SEBELUM submit
-      // check-out, supaya server sudah punya data GPS selengkap mungkin
-      // saat mengolah rute pasca-checkout.
+      // Saat check-out: hentikan capture & ambil titik penutup lokal
+      // sebelum submit. Sinkronisasi titik GPS itu sendiri lewat endpoint
+      // terpisah (POST /attendance/tracking) yang belum diselaraskan di
+      // TrackingService — di luar cakupan perubahan ini.
       if (!isCheckIn) {
         await TrackingService().pauseCapture();
         await TrackingService().captureFinalPoint();
-        final flushed = await TrackingService().flushForCheckout(satpamUuid: _satpamUuid);
-        gpsIncomplete = !flushed;
       }
 
-      final form = FormData({
-        'image': MultipartFile(
-          File(photoPath.value),
-          filename: 'attendance.png',
-          contentType: 'image/png',
-        ),
-        'lat': latitude.value.toString(),
-        'lng': longitude.value.toString(),
-        if (!isCheckIn) 'gps_incomplete': gpsIncomplete.toString(),
-      });
+      final token = await AuthService().getAccessToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Sesi tidak ditemukan, silakan masuk kembali.');
+      }
 
+      final objectUuid = await _uploadSelfieAndGetObjectUuid(token);
+
+      final endpoint = isCheckIn ? 'check-in' : 'check-out';
       final response = await GetConnect().post(
-        "$BASE_API_URL/absensi/record",
-        form,
+        '$BASE_API_URL/attendance/$endpoint',
+        {
+          'lat': latitude.value,
+          'lng': longitude.value,
+          'object_uuid': objectUuid,
+          'accuracy_m': accuracyMeter.value,
+        },
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
       );
 
-      final result = response.body;
-      resultData.value = result;
+      final body = response.body;
+      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
 
-      if (result == null) {
-        // MODE FALLBACK: backend belum tersedia (koneksi tidak sampai ke
-        // server sama sekali) — supaya bagian FE tetap bisa dites tanpa
-        // backend, anggap absensi berhasil pakai data lokal.
-        await _handleOfflineFallback();
+      if (ok) {
+        resultData.value = {'data': body is Map ? body['data'] : null};
+        final user = await AuthService().getUser();
+        final satpamUuid = (user?['uuid'] as String?) ?? '';
+        await _afterAttendanceSuccess(satpamUuid);
+        _showSuccessScreen();
         return;
       }
 
-      String msg = (result['message'] ?? "").toString().toLowerCase();
-      bool isSuccess = result['data'] != null;
-
-      if (isSuccess) {
-        await _afterAttendanceSuccess();
-        _showSuccessScreen();
-      } else if (msg.contains("jarak") || msg.contains("radius") || msg.contains("pos utama")) {
-        showResultDialog(type: 'LOCATION_INVALID');
-      } else if (msg.contains("wajah") || msg.contains("face")) {
-        showResultDialog(type: 'FACE_MISMATCH');
-      } else if (msg.contains("jadwal") || msg.contains("terlalu awal") || msg.contains("menyelesaikan shift")) {
-        showResultDialog(type: 'NO_SCHEDULE');
-      } else if (msg.contains("satpam") || msg.contains("user")) {
-        showResultDialog(type: 'USER_ERROR');
-      } else {
-        resultData.value = {'message': msg.isEmpty ? "Terjadi kesalahan server" : result['message']};
-        showResultDialog(type: 'SERVER_ERROR');
-      }
+      _handleAttendanceError(body);
     } catch (e) {
-      debugPrint("Error Exception: $e");
-      // MODE FALLBACK: exception di sini juga umumnya berarti backend
-      // tidak terjangkau (mis. connection refused) — perlakukan sama
-      // seperti result == null di atas.
+      debugPrint("AbsenCheckinController: gagal terhubung ke server, pakai fallback offline untuk testing FE: $e");
+      // MODE FALLBACK: exception di sini umumnya berarti backend tidak
+      // terjangkau (mis. connection refused) — supaya bagian FE tetap bisa
+      // dites tanpa backend, anggap absensi berhasil pakai data lokal.
       await _handleOfflineFallback();
     } finally {
       isSubmitting.value = false;
     }
+  }
+
+  /// Langkah 1: minta upload-link (GCS signed POST policy) untuk foto
+  /// selfie absensi. Langkah 2: POST file langsung ke bucket GCS dengan
+  /// field-field yang dikembalikan (fields dulu, file terakhir — syarat
+  /// GCS POST policy). Mengembalikan `object_uuid` untuk dikirim saat
+  /// check-in/check-out.
+  Future<String> _uploadSelfieAndGetObjectUuid(String token) async {
+    final ext = photoPath.value.contains('.') ? photoPath.value.split('.').last.toLowerCase() : 'jpg';
+
+    final linkRes = await GetConnect().post(
+      '$BASE_API_URL/attendance/upload-url',
+      {'ext': ext},
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    final linkOk = linkRes.statusCode != null && linkRes.statusCode! >= 200 && linkRes.statusCode! < 300;
+    final linkData = linkRes.body is Map ? linkRes.body['data'] as Map<String, dynamic>? : null;
+    if (!linkOk || linkData == null) {
+      throw Exception('Gagal mendapatkan link upload foto.');
+    }
+
+    final objectUuid = linkData['object_uuid'] as String;
+    final uploadUrl = linkData['upload_url'] as String;
+    final fields = Map<String, dynamic>.from(linkData['fields'] as Map);
+    final contentType = (linkData['content_type'] as String?) ?? fields['Content-Type'] as String? ?? 'image/jpeg';
+
+    final uploadRequest = http.MultipartRequest('POST', Uri.parse(uploadUrl))
+      ..fields.addAll(fields.map((key, value) => MapEntry(key, value.toString())))
+      ..files.add(await http.MultipartFile.fromPath(
+        'file',
+        photoPath.value,
+        contentType: MediaType.parse(contentType),
+      ));
+
+    final uploadResponse = await uploadRequest.send();
+    if (uploadResponse.statusCode < 200 || uploadResponse.statusCode >= 300) {
+      throw Exception('Gagal mengunggah foto (status ${uploadResponse.statusCode}).');
+    }
+
+    return objectUuid;
+  }
+
+  /// Terjemahkan `error.code` dari backend ke dialog yang sudah ada.
+  /// Kode-kode ini mengikuti dokumentasi endpoint Attendance — lihat
+  /// bagian Error Codes.
+  void _handleAttendanceError(dynamic body) {
+    final error = body is Map ? body['error'] : null;
+    final code = error is Map ? error['code']?.toString() : null;
+    final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
+    resultData.value = {'message': rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.'};
+
+    switch (code) {
+      case 'OUTSIDE_POS_RADIUS':
+        showResultDialog(type: 'LOCATION_INVALID');
+        return;
+      case 'FACE_NOT_MATCHED':
+      case 'FACE_NOT_ENROLLED':
+        showResultDialog(type: 'FACE_MISMATCH');
+        return;
+      case 'NO_OPEN_SHIFT':
+      case 'OUTSIDE_CHECK_IN_WINDOW':
+      case 'NO_UTAMA_POS':
+      case 'NO_CLIENT_SCOPE':
+      case 'ALREADY_CHECKED_IN':
+      case 'NOT_CHECKED_IN':
+        showResultDialog(type: 'NO_SCHEDULE');
+        return;
+    }
+
+    if (code != null && code.startsWith('FACE_')) {
+      showResultDialog(type: 'FACE_MISMATCH');
+      return;
+    }
+
+    showResultDialog(type: 'SERVER_ERROR');
   }
 
   /// Dipakai hanya untuk testing FE selama backend `/v1/absensi/record`
@@ -239,7 +306,9 @@ class AbsenCheckinController extends GetxController {
         'time': DateTime.now().toIso8601String(),
       },
     };
-    await _afterAttendanceSuccess();
+    final user = await AuthService().getUser();
+    final satpamUuid = (user?['uuid'] as String?) ?? '';
+    await _afterAttendanceSuccess(satpamUuid);
     _showSuccessScreen();
   }
 
@@ -270,9 +339,9 @@ class AbsenCheckinController extends GetxController {
   /// Efek samping setelah absensi tercatat (baik sukses sungguhan maupun
   /// fallback offline): mulai tracking GPS saat check-in, atau hentikannya
   /// & bersihkan cache lokal saat check-out.
-  Future<void> _afterAttendanceSuccess() async {
+  Future<void> _afterAttendanceSuccess(String satpamUuid) async {
     if (isCheckIn) {
-      await TrackingService().startTracking(absensiUuid: _satpamUuid);
+      await TrackingService().startTracking(absensiUuid: satpamUuid);
       await initializeBackgroundTracking();
     } else {
       // KHUSUS DEBUGGING: tulis peta rute GPS sesi ini ke file HTML lokal
@@ -281,7 +350,7 @@ class AbsenCheckinController extends GetxController {
       // SEBELUM stopTracking() membersihkannya. Tidak menambah UI apa pun &
       // tidak pernah jalan di build production.
       if (kDebugMode) {
-        await TrackingService().exportDebugMap(satpamUuid: _satpamUuid);
+        await TrackingService().exportDebugMap(satpamUuid: satpamUuid);
       }
       // stopTracking() membersihkan seluruh cache GPS lokal shift ini (lihat
       // catatan MODE FALLBACK di TrackingService.stopTracking).
