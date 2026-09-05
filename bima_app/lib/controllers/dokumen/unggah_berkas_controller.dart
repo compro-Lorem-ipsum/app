@@ -159,7 +159,7 @@ class UnggahBerkasController extends GetxController {
       );
       final saveOk = saveResponse.statusCode != null && saveResponse.statusCode! >= 200 && saveResponse.statusCode! < 300;
       if (!saveOk) {
-        _showDocumentError(saveResponse.statusCode, saveResponse.body);
+        _showDocumentError(saveResponse.body);
         return;
       }
 
@@ -179,15 +179,26 @@ class UnggahBerkasController extends GetxController {
     }
   }
 
-  void _showDocumentError(int? statusCode, dynamic body) {
+  /// Dulu switch di sini memakai status HTTP mentah (400/202) yang cuma
+  /// tebakan dan salah satu di antaranya (202 Accepted) bahkan bukan kode
+  /// error sama sekali. Sekarang beralih ke error.code sesuai dokumentasi
+  /// endpoint Documents: OBJECT_INVALID (422, magic-byte gagal cocok
+  /// dengan ekstensi), OBJECT_IN_USE (409, object_uuid sudah dipakai
+  /// record lain), NOT_FOUND (404, object_uuid tidak ada/sudah kedaluwarsa).
+  void _showDocumentError(dynamic body) {
     final error = body is Map ? body['error'] : null;
+    final code = error is Map ? error['code']?.toString() : null;
     final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
-    switch (statusCode) {
-      case 400:
-        _showError('Format File Tidak Didukung', rawMessage ?? 'Gunakan file JPG atau PDF.');
+
+    switch (code) {
+      case 'OBJECT_INVALID':
+        _showError('Format File Tidak Didukung', rawMessage ?? 'File yang diunggah tidak valid. Gunakan file JPG atau PDF asli.');
         return;
-      case 202:
-        _showError('Tipe Dokumen Tidak Valid', rawMessage ?? 'Tipe dokumen tidak dikenali.');
+      case 'OBJECT_IN_USE':
+        _showError('File Sudah Terpakai', rawMessage ?? 'File ini sudah terpasang di dokumen lain. Unggah ulang dari awal.');
+        return;
+      case 'NOT_FOUND':
+        _showError('Sesi Unggah Kedaluwarsa', rawMessage ?? 'Link unggah sudah tidak berlaku. Coba unggah ulang.');
         return;
       default:
         _showError('Gagal Mengunggah', rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.');

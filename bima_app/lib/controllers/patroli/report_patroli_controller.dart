@@ -138,6 +138,18 @@ class ReportPatroliController extends GetxController {
       final data = res.body is Map ? res.body['data'] : null;
       if (data is List) {
         listPos.value = data;
+        return;
+      }
+
+      final error = res.body is Map ? res.body['error'] : null;
+      if (error is Map && error['code'] == 'NO_CLIENT_SCOPE') {
+        Get.snackbar(
+          'Belum Ada Penugasan',
+          'Anda belum ditugaskan ke client mana pun, jadi tidak ada pos yang bisa dipilih.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+        );
       }
     } catch (e) {
       debugPrint('ReportPatroliController: gagal ambil daftar pos: $e');

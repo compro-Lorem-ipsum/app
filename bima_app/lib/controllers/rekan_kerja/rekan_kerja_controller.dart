@@ -85,6 +85,16 @@ class RekanKerjaController extends GetxController {
         }
       } else {
         debugPrint('RekanKerjaController: gagal ambil rekan kerja (status ${response.statusCode}).');
+        final error = response.body is Map ? response.body['error'] : null;
+        if (error is Map && error['code'] == 'NO_CLIENT_SCOPE') {
+          Get.snackbar(
+            'Belum Ada Penugasan',
+            'Anda belum ditugaskan ke client mana pun, jadi tidak ada rekan kerja yang bisa ditampilkan.',
+            backgroundColor: Colors.red,
+            colorText: Colors.white,
+            snackPosition: SnackPosition.BOTTOM,
+          );
+        }
       }
     } catch (e) {
       debugPrint('RekanKerjaController: gagal ambil rekan kerja: $e');
