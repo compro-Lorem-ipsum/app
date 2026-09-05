@@ -21,7 +21,10 @@ class RepDoksView extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor,
       body: SafeArea(
-        child: NotificationListener<ScrollEndNotification>(
+        child: RefreshIndicator(
+          color: primaryColor,
+          onRefresh: controller.loadDokumen,
+          child: NotificationListener<ScrollEndNotification>(
           onNotification: (notification) {
             final metrics = notification.metrics;
             if (metrics.pixels >= metrics.maxScrollExtent - 200) {
@@ -30,6 +33,7 @@ class RepDoksView extends StatelessWidget {
             return false;
           },
           child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(25, 16, 25, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,6 +75,7 @@ class RepDoksView extends StatelessWidget {
                   : const SizedBox.shrink()),
             ],
           ),
+        ),
         ),
         ),
       ),

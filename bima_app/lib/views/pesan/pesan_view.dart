@@ -39,30 +39,35 @@ class PesanView extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: NotificationListener<ScrollEndNotification>(
-                onNotification: (notification) {
-                  final metrics = notification.metrics;
-                  if (metrics.pixels >= metrics.maxScrollExtent - 200) {
-                    controller.loadMoreMessages();
-                  }
-                  return false;
-                },
-                child: Obx(() => ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
-                      itemCount: controller.messages.length + (controller.isLoadingMore.value ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index >= controller.messages.length) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            child: Center(child: CircularProgressIndicator(color: primaryColor)),
+              child: RefreshIndicator(
+                color: primaryColor,
+                onRefresh: controller.refreshAll,
+                child: NotificationListener<ScrollEndNotification>(
+                  onNotification: (notification) {
+                    final metrics = notification.metrics;
+                    if (metrics.pixels >= metrics.maxScrollExtent - 200) {
+                      controller.loadMoreMessages();
+                    }
+                    return false;
+                  },
+                  child: Obx(() => ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
+                        itemCount: controller.messages.length + (controller.isLoadingMore.value ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index >= controller.messages.length) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Center(child: CircularProgressIndicator(color: primaryColor)),
+                            );
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildMessageCard(controller, controller.messages[index]),
                           );
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _buildMessageCard(controller, controller.messages[index]),
-                        );
-                      },
-                    )),
+                        },
+                      )),
+                ),
               ),
             ),
             const BottomNavBar(active: AppTab.pesan),

@@ -10,10 +10,19 @@
 // "pesan bergaya panic alert" di kartu pesan (lihat pesan_view.dart) tidak
 // punya sumber data nyata; panic alert adalah fitur terpisah (`/alerts`),
 // bukan bagian dari `/messages`.
+//
+// isRead seharusnya murni dari `is_read` (server), tapi kalau POST
+// /messages/:uuid/read gagal atau endpoint-nya ternyata tidak persis
+// seperti dokumentasi, hasilnya sama seperti Pengumuman: pesan yang baru
+// saja dibaca kembali muncul "belum dibaca" begitu daftar di-fetch ulang
+// (buka lagi, atau pull-to-refresh). UUID yang sudah dibuka disimpan juga
+// ke SharedPreferences sebagai jaring pengaman lokal — kalau server tidak
+// mencatatnya, klien tetap ingat.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/auth_service.dart';
 
@@ -41,6 +50,7 @@ class PesanItem {
 
 class PesanController extends GetxController {
   static const primaryColor = Color(0xFF122C93);
+  static const _locallyReadUuidsPrefKey = 'pesan_locally_read_uuids';
 
   final messages = <PesanItem>[].obs;
   final unreadCount = 0.obs;
@@ -53,14 +63,37 @@ class PesanController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    fetchMessages();
-    fetchUnreadCount();
+    refreshAll();
+  }
+
+  /// Dipakai onInit dan pull-to-refresh (lihat pesan_view.dart) — daftar
+  /// DAN badge jumlah belum dibaca harus ikut disegarkan bersamaan supaya
+  /// tidak drift satu sama lain. Nama sengaja bukan `refresh()` polos —
+  /// itu nama method (@protected) bawaan GetxController buat notify
+  /// GetBuilder, beda arti kalau dipakai di sini.
+  Future<void> refreshAll() async {
+    await fetchMessages();
+    await fetchUnreadCount();
   }
 
   Future<Map<String, String>?> _authHeaders() async {
     final token = await AuthService().getAccessToken();
     if (token == null || token.isEmpty) return null;
     return {'Authorization': 'Bearer $token'};
+  }
+
+  Future<Set<String>> _loadLocallyReadUuids() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(_locallyReadUuidsPrefKey) ?? const []).toSet();
+  }
+
+  Future<void> _markReadLocally(String uuid) async {
+    if (uuid.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final current = (prefs.getStringList(_locallyReadUuidsPrefKey) ?? const []).toSet();
+    if (current.add(uuid)) {
+      await prefs.setStringList(_locallyReadUuidsPrefKey, current.toList());
+    }
   }
 
   Future<void> fetchMessages() async {
@@ -96,6 +129,7 @@ class PesanController extends GetxController {
 
   Future<({List<PesanItem> items, String? nextCursor, bool hasMore})> _fetchPage({String? cursor}) async {
     try {
+      final locallyRead = await _loadLocallyReadUuids();
       final response = await GetConnect().get(
         '$BASE_API_URL/messages',
         query: {if (cursor != null) 'cursor': cursor},
@@ -113,12 +147,13 @@ class PesanController extends GetxController {
       final items = data.whereType<Map>().map((m) {
         final createdAt = DateTime.tryParse((m['created_at'] ?? '').toString())?.toLocal();
         final sender = m['sender'] is Map ? Map<String, dynamic>.from(m['sender'] as Map) : null;
+        final uuid = (m['uuid'] ?? '').toString();
         return PesanItem(
-          uuid: (m['uuid'] ?? '').toString(),
+          uuid: uuid,
           title: (m['title'] ?? sender?['nama'] ?? '').toString(),
           time: createdAt != null ? _formatTime(createdAt) : '-',
           preview: (m['content'] ?? '').toString(),
-          isRead: m['is_read'] == true,
+          isRead: m['is_read'] == true || locallyRead.contains(uuid),
         );
       }).toList();
 
@@ -163,6 +198,7 @@ class PesanController extends GetxController {
       item.isRead = true;
       messages.refresh();
       if (unreadCount.value > 0) unreadCount.value -= 1;
+      _markReadLocally(item.uuid);
       _markRead(item.uuid);
     }
 

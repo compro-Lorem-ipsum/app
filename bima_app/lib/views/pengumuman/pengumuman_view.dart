@@ -36,14 +36,19 @@ class PengumumanView extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: Obx(() => ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
-                    itemCount: controller.announcements.length,
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildAnnouncementCard(controller, controller.announcements[index]),
-                    ),
-                  )),
+              child: RefreshIndicator(
+                color: primaryColor,
+                onRefresh: controller.fetchAnnouncements,
+                child: Obx(() => ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
+                      itemCount: controller.announcements.length,
+                      itemBuilder: (context, index) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildAnnouncementCard(controller, controller.announcements[index]),
+                      ),
+                    )),
+              ),
             ),
           ],
         ),

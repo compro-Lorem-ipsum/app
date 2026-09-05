@@ -58,6 +58,22 @@ class LandingController extends GetxController {
     documentsComplete.value = await DocumentsService().isComplete();
   }
 
+  /// Dipakai pull-to-refresh di landing_view.dart — menyegarkan semua
+  /// data kartu Beranda sekaligus, termasuk preview Pesan & Pengumuman
+  /// (lewat instance controller yang sama, lihat komentar di atas kelas ini).
+  /// Nama sengaja bukan `refresh()` polos — itu nama method (@protected)
+  /// bawaan GetxController buat notify GetBuilder, beda arti di sini.
+  Future<void> refreshAll() async {
+    await Future.wait([
+      refreshStatus(),
+      loadProfile(),
+      loadAttendanceSummary(),
+      loadDocumentsStatus(),
+      pesanController.refreshAll(),
+      pengumumanController.fetchAnnouncements(),
+    ]);
+  }
+
   Future<void> refreshStatus() async {
     isOnDuty.value = await TrackingService().isOnDuty();
   }

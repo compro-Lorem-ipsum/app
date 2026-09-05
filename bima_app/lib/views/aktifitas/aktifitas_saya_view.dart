@@ -42,38 +42,51 @@ class AktifitasSayaView extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: NotificationListener<ScrollEndNotification>(
-                onNotification: (notification) {
-                  final metrics = notification.metrics;
-                  if (metrics.pixels >= metrics.maxScrollExtent - 200) {
-                    controller.loadMoreActivity();
-                  }
-                  return false;
-                },
-                child: Obx(() {
-                  if (controller.isLoading.value) {
-                    return const Center(child: CircularProgressIndicator(color: primaryColor));
-                  }
-                  final groups = controller.currentGroups;
-                  if (groups.isEmpty) {
-                    return const Center(
-                      child: Text('Belum ada aktivitas.', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+              child: RefreshIndicator(
+                color: primaryColor,
+                onRefresh: controller.loadActivity,
+                child: NotificationListener<ScrollEndNotification>(
+                  onNotification: (notification) {
+                    final metrics = notification.metrics;
+                    if (metrics.pixels >= metrics.maxScrollExtent - 200) {
+                      controller.loadMoreActivity();
+                    }
+                    return false;
+                  },
+                  child: Obx(() {
+                    if (controller.isLoading.value) {
+                      return const Center(child: CircularProgressIndicator(color: primaryColor));
+                    }
+                    final groups = controller.currentGroups;
+                    if (groups.isEmpty) {
+                      return ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          Center(
+                            child: Padding(
+                              padding: EdgeInsets.only(top: 24),
+                              child: Text('Belum ada aktivitas.', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                    return ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
+                      itemCount: groups.length + (controller.isLoadingMore.value ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index >= groups.length) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(child: CircularProgressIndicator(color: primaryColor)),
+                          );
+                        }
+                        return _buildGroup(groups[index]);
+                      },
                     );
-                  }
-                  return ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
-                    itemCount: groups.length + (controller.isLoadingMore.value ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index >= groups.length) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 16),
-                          child: Center(child: CircularProgressIndicator(color: primaryColor)),
-                        );
-                      }
-                      return _buildGroup(groups[index]);
-                    },
-                  );
-                }),
+                  }),
+                ),
               ),
             ),
             const BottomNavBar(active: AppTab.aktifitas),

@@ -24,7 +24,10 @@ class PengajuanView extends StatelessWidget {
         child: Column(
           children: [
             Expanded(
-              child: NotificationListener<ScrollEndNotification>(
+              child: RefreshIndicator(
+                color: primaryColor,
+                onRefresh: controller.loadRequests,
+                child: NotificationListener<ScrollEndNotification>(
                 onNotification: (notification) {
                   final metrics = notification.metrics;
                   if (metrics.pixels >= metrics.maxScrollExtent - 200) {
@@ -33,6 +36,7 @@ class PengajuanView extends StatelessWidget {
                   return false;
                 },
                 child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(25, 16, 25, 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,6 +105,7 @@ class PengajuanView extends StatelessWidget {
                           )
                         : const SizedBox.shrink()),
                   ],
+                ),
                 ),
                 ),
               ),
