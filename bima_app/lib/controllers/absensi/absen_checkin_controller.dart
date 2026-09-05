@@ -343,13 +343,13 @@ class AbsenCheckinController extends GetxController {
   /// hentikan tracking) tetap bisa dicoba end-to-end tanpa server.
   Future<void> _handleOfflineFallback() async {
     debugPrint('AbsenCheckinController: backend tidak terjangkau, pakai fallback offline untuk testing FE.');
+    final now = DateTime.now().toIso8601String();
     resultData.value = {
       'message': 'Absensi berhasil dicatat (mode offline — backend belum tersedia)',
       'data': {
-        'status': isCheckIn ? 'CHECK_IN' : 'CHECK_OUT',
-        'kategori': isInRadius.value ? 'Tepat Waktu' : 'Terlambat',
+        'status': isInRadius.value ? 'present' : 'late',
         'distance': distanceMeter.value,
-        'time': DateTime.now().toIso8601String(),
+        if (isCheckIn) 'checked_in_at': now else 'checked_out_at': now,
       },
     };
     final user = await AuthService().getUser();
@@ -360,10 +360,17 @@ class AbsenCheckinController extends GetxController {
 
   /// Tampilkan halaman sukses penuh (bukan dialog) sesuai desain Figma:
   /// icon centang animasi + kartu WAKTU/LOKASI/(STATUS khusus check-in).
+  ///
+  /// Field waktu & status di sini HARUS sama dengan yang dipakai
+  /// AttendanceSummaryService/AktifitasSayaController untuk record yang
+  /// sama (`checked_in_at`/`checked_out_at`, `status` present/late/dst) —
+  /// sebelumnya salah tebak `time`/`kategori` yang tidak pernah ada di
+  /// respons manapun, jadi WAKTU selalu tampil "-" dan STATUS selalu default.
   void _showSuccessScreen() {
     final data = resultData.value?['data'] ?? {};
-    final waktu = formatJamAbsensi(data['time'] as String?);
-    final kategori = (data['kategori'] ?? '').toString();
+    final waktuIso = (isCheckIn ? data['checked_in_at'] : data['checked_out_at']) as String?;
+    final waktu = formatJamAbsensi(waktuIso);
+    final kategori = _statusLabel((data['status'] ?? '').toString());
 
     Get.off(() => SuccessScreen(
           title: 'Behasil',
@@ -371,7 +378,7 @@ class AbsenCheckinController extends GetxController {
           details: {
             'WAKTU': waktu,
             'LOKASI': posNama,
-            if (isCheckIn) 'STATUS': kategori.isEmpty ? '-' : kategori,
+            if (isCheckIn) 'STATUS': kategori,
           },
           buttonLabel: 'Kembali ke Beranda',
           buttonWidth: 316,
@@ -402,6 +409,26 @@ class AbsenCheckinController extends GetxController {
       // catatan MODE FALLBACK di TrackingService.stopTracking).
       await TrackingService().stopTracking();
       await cancelBackgroundTracking();
+    }
+  }
+
+  /// Sama seperti _statusBadge di AktifitasSayaController — label yang
+  /// sama untuk `status` record yang sama, cuma di sini tanpa warna badge
+  /// karena kartu sukses ini cuma teks polos.
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'present':
+        return 'Tepat Waktu';
+      case 'late':
+        return 'Terlambat';
+      case 'absent':
+        return 'Tidak Hadir';
+      case 'excused':
+        return 'Izin/Cuti';
+      case 'partial':
+        return 'Belum Check-out';
+      default:
+        return '-';
     }
   }
 
@@ -508,21 +535,24 @@ class AbsenCheckinController extends GetxController {
             ),
             const SizedBox(height: 20),
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                OutlinedButton(
-                  onPressed: () => Get.back(),
-                  style: OutlinedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
-                  child: const Text("Coba Lagi", style: TextStyle(color: primaryBtnStyle)),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Get.back(),
+                    style: OutlinedButton.styleFrom(side: const BorderSide(color: primaryBtnStyle), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
+                    child: const Text("Coba Lagi", style: TextStyle(color: primaryBtnStyle)),
+                  ),
                 ),
                 const SizedBox(width: 10),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: primaryBtnStyle, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
-                  onPressed: () {
-                    Get.back();
-                    retakePhoto();
-                  },
-                  child: const Text("Ambil Foto Ulang", style: TextStyle(color: Colors.white)),
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: primaryBtnStyle, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
+                    onPressed: () {
+                      Get.back();
+                      retakePhoto();
+                    },
+                    child: const Text("Ambil Foto Ulang", style: TextStyle(color: Colors.white), textAlign: TextAlign.center),
+                  ),
                 ),
               ],
             ),
