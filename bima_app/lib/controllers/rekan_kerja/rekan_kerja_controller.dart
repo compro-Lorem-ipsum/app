@@ -23,12 +23,14 @@ class RekanKerjaItem {
   final String nip;
   final String role;
   final Color roleColor;
+  final String? avatarUrl;
 
   RekanKerjaItem({
     required this.uuid,
     required this.name,
     required this.nip,
     required this.role,
+    this.avatarUrl,
   }) : roleColor = _colorForRole(role);
 
   static Color _colorForRole(String role) {
@@ -112,6 +114,7 @@ class RekanKerjaController extends GetxController {
                   // API mengembalikan jabatan huruf kecil ('anggota'/'danru'/
                   // 'chief') — kapitalkan huruf depan untuk ditampilkan.
                   role: _capitalize((s['jabatan'] ?? '').toString()),
+                  avatarUrl: s['avatar_url']?.toString(),
                 );
               }).toList()
             : <RekanKerjaItem>[];

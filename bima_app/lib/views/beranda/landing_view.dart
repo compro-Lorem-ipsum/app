@@ -111,7 +111,9 @@ class LandingView extends StatelessWidget {
               CircleAvatar(
                 radius: 28,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                child: const Icon(Icons.person, color: AppColors.primary, size: 30),
+                backgroundImage: (controller.avatarUrl?.isNotEmpty ?? false) ? NetworkImage(controller.avatarUrl!) : null,
+                onBackgroundImageError: (controller.avatarUrl?.isNotEmpty ?? false) ? (_, _) {} : null,
+                child: (controller.avatarUrl?.isNotEmpty ?? false) ? null : const Icon(Icons.person, color: AppColors.primary, size: 30),
               ),
               // Titik merah = dokumen (KTP/BPJS/NPWP) belum lengkap. Null
               // (belum diketahui) dianggap seperti belum lengkap supaya

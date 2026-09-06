@@ -162,7 +162,13 @@ class RekanKerjaView extends StatelessWidget {
     return CardContainer(
       child: Row(
         children: [
-          const CircleAvatar(radius: 25, backgroundColor: Color(0xFFEBEFFF), child: Icon(Icons.person, color: primaryColor, size: 28)),
+          CircleAvatar(
+            radius: 25,
+            backgroundColor: const Color(0xFFEBEFFF),
+            backgroundImage: (item.avatarUrl?.isNotEmpty ?? false) ? NetworkImage(item.avatarUrl!) : null,
+            onBackgroundImageError: (item.avatarUrl?.isNotEmpty ?? false) ? (_, _) {} : null,
+            child: (item.avatarUrl?.isNotEmpty ?? false) ? null : const Icon(Icons.person, color: primaryColor, size: 28),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

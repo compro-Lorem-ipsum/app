@@ -85,7 +85,13 @@ class ProfileSayaView extends StatelessWidget {
     return CardContainer(
       child: Row(
         children: [
-          const CircleAvatar(radius: 30, backgroundColor: Color(0xFFEBEFFF), child: Icon(Icons.person, color: primaryColor, size: 34)),
+          CircleAvatar(
+            radius: 30,
+            backgroundColor: const Color(0xFFEBEFFF),
+            backgroundImage: (controller.displayAvatarUrl?.isNotEmpty ?? false) ? NetworkImage(controller.displayAvatarUrl!) : null,
+            onBackgroundImageError: (controller.displayAvatarUrl?.isNotEmpty ?? false) ? (_, _) {} : null,
+            child: (controller.displayAvatarUrl?.isNotEmpty ?? false) ? null : const Icon(Icons.person, color: primaryColor, size: 34),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

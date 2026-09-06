@@ -88,6 +88,7 @@ class LandingController extends GetxController {
   }
 
   String get displayNama => (profile.value?['nama'] as String?) ?? '-';
+  String? get avatarUrl => profile.value?['avatar_url'] as String?;
   String get displayNip => (profile.value?['nip'] as String?) ?? '-';
 
   String get displayJabatan {

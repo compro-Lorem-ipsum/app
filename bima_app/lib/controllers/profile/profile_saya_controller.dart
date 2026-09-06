@@ -91,6 +91,7 @@ class ProfileSayaController extends GetxController {
   }
 
   String get displayNama => _field('nama');
+  String? get displayAvatarUrl => profile.value?['avatar_url'] as String?;
   String get displayNip => _field('nip');
   String get displayEmail => _field('email');
   String get displayNrg => _field('nrg');
