@@ -10,14 +10,17 @@
 // dihapus oleh clearSessionIfNotRemembered() di awal main() saat aplikasi
 // dibuka lagi dari kondisi tertutup penuh — lihat main.dart.
 //
-// isLoggedIn() juga mengecek klaim `exp` di access_token (JWT) — kalau
-// sudah kedaluwarsa, sesi otomatis dibersihkan dan dianggap logout.
-//
-// refreshToken() (POST /auth/refresh) sudah tersedia untuk menukar
-// refresh_token dengan sesi baru, TAPI belum dipanggil otomatis di mana
-// pun (belum ada auto-retry-on-401) — itu sengaja jadi task terpisah,
-// begitu juga pemasangan header Authorization di pemanggilan API lain
-// (absensi/patroli/tracking/register).
+// isLoggedIn() mengecek klaim `exp` di access_token (JWT) DULU; kalau
+// access_token itu sendiri sudah kedaluwarsa (wajar — umurnya pendek),
+// dicoba tukar dulu pakai refresh_token (POST /auth/refresh, umurnya jauh
+// lebih panjang) sebelum benar-benar dianggap logout. Tanpa langkah ini
+// "Ingat Saya" nyaris tidak berarti apa-apa: access_token kedaluwarsa jauh
+// lebih cepat daripada niat "ingat saya selama berhari-hari", jadi hampir
+// setiap kali app dibuka ulang user akan diminta login lagi walau sudah
+// centang Ingat Saya — pengecekan refresh_token inilah yang bikin sesi
+// benar-benar bertahan sesuai durasi refresh_token, bukan durasi
+// access_token. Auto-retry-on-401 untuk panggilan API LAIN (absensi/
+// patroli/tracking/register) masih task terpisah, belum ada di sini.
 //
 // validateSessionWithServer() (GET /auth/me) dipanggil main.dart saat app
 // dibuka untuk menangkap token yang di-revoke di server walau klaim exp
@@ -77,19 +80,50 @@ class AuthService {
     return jsonDecode(raw) as Map<String, dynamic>;
   }
 
-  /// True kalau ada access_token tersimpan DAN belum kedaluwarsa (dibaca
-  /// dari klaim `exp` di JWT-nya). Kalau ternyata sudah kedaluwarsa, sesi
-  /// ikut dibersihkan di sini supaya tidak nyangkut setengah-login.
+  /// True kalau access_token tersimpan masih valid, ATAU berhasil ditukar
+  /// pakai refresh_token kalau access_token-nya sudah kedaluwarsa. Baru
+  /// benar-benar dianggap logout (sesi dibersihkan) kalau keduanya gagal.
+  ///
+  /// Catatan soal "Ingat Saya": kalau sebelumnya TIDAK dicentang,
+  /// clearSessionIfNotRemembered() (dipanggil di main() SEBELUM ini) sudah
+  /// menghapus seluruh sesi duluan — jadi getAccessToken() di sini pasti
+  /// null dan fungsi ini langsung return false tanpa sempat mencoba
+  /// refresh sama sekali. Refresh-fallback di bawah HANYA pernah berjalan
+  /// untuk sesi yang memang dicentang "Ingat Saya".
   Future<bool> isLoggedIn() async {
     final token = await getAccessToken();
     if (token == null || token.isEmpty) return false;
 
     final expiresAt = _decodeJwtExpiry(token);
-    if (expiresAt != null && !DateTime.now().toUtc().isBefore(expiresAt)) {
-      await clearSession();
+    final accessTokenValid = expiresAt == null || DateTime.now().toUtc().isBefore(expiresAt);
+    if (accessTokenValid) return true;
+
+    if (await _tryRefreshSession()) return true;
+
+    await clearSession();
+    return false;
+  }
+
+  /// True kalau refresh_token tersimpan masih berlaku (dicek dulu secara
+  /// lokal dari refresh_expires_at supaya tidak buang request kalau sudah
+  /// pasti kedaluwarsa) DAN berhasil ditukar ke sesi baru lewat
+  /// [refreshToken]. Sesi lama dibiarkan apa adanya kalau gagal — pemanggil
+  /// ([isLoggedIn]) yang memutuskan untuk membersihkannya.
+  Future<bool> _tryRefreshSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final refreshExpiresAtRaw = prefs.getString(_keyRefreshExpiresAt);
+    final refreshExpiresAt = refreshExpiresAtRaw == null ? null : DateTime.tryParse(refreshExpiresAtRaw)?.toUtc();
+    if (refreshExpiresAt != null && !DateTime.now().toUtc().isBefore(refreshExpiresAt)) {
       return false;
     }
-    return true;
+
+    try {
+      await refreshToken();
+      return true;
+    } catch (e) {
+      debugPrint('AuthService: gagal menukar refresh_token saat startup: $e');
+      return false;
+    }
   }
 
   /// Baca klaim `exp` (Unix timestamp detik) dari access_token JWT tanpa
