@@ -249,11 +249,19 @@ class AbsenCheckinController extends GetxController {
 
       _handleAttendanceError(body);
     } catch (e) {
-      debugPrint("AbsenCheckinController: gagal terhubung ke server, pakai fallback offline untuk testing FE: $e");
-      // MODE FALLBACK: exception di sini umumnya berarti backend tidak
-      // terjangkau (mis. connection refused) — supaya bagian FE tetap bisa
-      // dites tanpa backend, anggap absensi berhasil pakai data lokal.
-      await _handleOfflineFallback();
+      debugPrint("AbsenCheckinController: gagal terhubung ke server: $e");
+      if (kDebugMode) {
+        // MODE FALLBACK: HANYA di build debug, supaya bagian FE tetap bisa
+        // dites tanpa backend. WAJIB dijaga di balik kDebugMode — tanpa
+        // ini, siapa pun tinggal memutus koneksi (mis. mode pesawat)
+        // tepat saat menekan tombol check-in/out supaya app menganggap
+        // absensi "berhasil" dari data lokal padahal server tidak pernah
+        // menerimanya sama sekali. Di build production, exception di sini
+        // HARUS selalu berakhir sebagai error asli ke pengguna.
+        await _handleOfflineFallback();
+      } else {
+        showResultDialog(type: 'SERVER_ERROR');
+      }
     } finally {
       isSubmitting.value = false;
     }

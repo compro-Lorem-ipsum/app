@@ -115,6 +115,18 @@ class LoginController extends GetxController {
           return;
         }
 
+        // Lapisan pertahanan tambahan di klien: backend sudah menolak akun
+        // 'pending' lewat error.code ACCOUNT_PENDING (lihat
+        // _showLoginError), tapi status non-aktif LAIN (mis. disuspend/
+        // dinonaktifkan admin) belum tentu ditolak di endpoint /auth/login
+        // itu sendiri - field `status` di sini yang jadi penentu terakhir
+        // sebelum sesi disimpan.
+        final status = user['status']?.toString();
+        if (status != null && status != 'active') {
+          _showError('Akun Tidak Aktif', 'Akun Anda berstatus "$status" dan tidak dapat digunakan. Hubungi admin untuk informasi lebih lanjut.');
+          return;
+        }
+
         await AuthService().saveSession(
           accessToken: data['access_token'] as String,
           refreshToken: data['refresh_token'] as String,

@@ -126,6 +126,17 @@ class AuthService {
     }
   }
 
+  /// True kalau field `status` pada objek user ADA dan bukan `"active"`
+  /// (mis. suspended/dinonaktifkan admin). Field yang hilang dianggap TIDAK
+  /// menghalangi (fail-open) - pengecekan ini cuma lapisan pertahanan
+  /// tambahan di klien supaya akun yang sudah jelas-jelas dinonaktifkan
+  /// tidak diam-diam tetap terpakai selama access_token/refresh_token-nya
+  /// masih teknis valid; otorisasi sesungguhnya tetap tanggung jawab server.
+  bool _isKnownInactive(Map<String, dynamic> user) {
+    final status = user['status']?.toString();
+    return status != null && status != 'active';
+  }
+
   /// Baca klaim `exp` (Unix timestamp detik) dari access_token JWT tanpa
   /// perlu memverifikasi tanda tangannya — cukup untuk tahu kapan token
   /// ini kedaluwarsa di sisi klien. Null kalau token bukan JWT yang valid
@@ -214,6 +225,15 @@ class AuthService {
             ? Map<String, dynamic>.from(data['user'] as Map)
             : (data is Map && data['uuid'] != null ? Map<String, dynamic>.from(data) : null);
         if (userMap != null) {
+          // Akun bisa saja dinonaktifkan admin SETELAH access_token-nya
+          // diterbitkan (klaim exp JWT belum lewat, tapi statusnya sudah
+          // berubah di server) - tanpa cek ini, satpam yang sudah
+          // dinonaktifkan tetap bisa pakai app sampai token itu benar-benar
+          // kedaluwarsa (bisa sampai 15 menit).
+          if (_isKnownInactive(userMap)) {
+            await clearSession();
+            return false;
+          }
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(_keyUser, jsonEncode(userMap));
         }
@@ -251,7 +271,19 @@ class AuthService {
     final user = data?['user'];
 
     if (!ok || data == null || user is! Map) {
-      throw Exception('Gagal memperbarui sesi lewat refresh token (status ${response.statusCode}).');
+      // Sertakan body respons (biasanya { error: { code, message } }) di
+      // pesan exception - sebelumnya cuma status code, jadi tidak
+      // kelihatan APA alasan penolakannya (refresh_token beneran expired,
+      // atau server menolak karena sebab lain seperti bentuk request salah).
+      throw Exception('Gagal memperbarui sesi lewat refresh token (status ${response.statusCode}, body: ${response.body}).');
+    }
+
+    final userMap = Map<String, dynamic>.from(user);
+    if (_isKnownInactive(userMap)) {
+      // Akun dinonaktifkan selagi refresh_token-nya masih valid - jangan
+      // simpan sesi baru sama sekali, biar pemanggil (isLoggedIn) jatuh ke
+      // clearSession() dan pengguna diarahkan ke halaman Masuk.
+      throw Exception('Akun tidak aktif (status: ${userMap['status']}).');
     }
 
     final prefs = await SharedPreferences.getInstance();
@@ -261,7 +293,7 @@ class AuthService {
       accessToken: data['access_token'] as String,
       refreshToken: data['refresh_token'] as String,
       refreshExpiresAt: data['refresh_expires_at'] as String,
-      user: Map<String, dynamic>.from(user),
+      user: userMap,
       rememberMe: rememberMe,
     );
   }

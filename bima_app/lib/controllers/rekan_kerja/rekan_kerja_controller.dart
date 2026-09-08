@@ -106,7 +106,16 @@ class RekanKerjaController extends GetxController {
         clientNama.value = (data['client_nama'] ?? '').toString();
         final satpams = data['satpams'];
         final items = satpams is List
-            ? satpams.whereType<Map>().map((s) {
+            ? satpams.whereType<Map>()
+                // Rekan yang statusnya bukan 'active' (mis. disuspend/
+                // dinonaktifkan) tidak ditampilkan - field yang hilang
+                // dianggap tidak menghalangi (fail-open) kalau-kalau
+                // endpoint ini belum/tidak selalu menyertakan `status`.
+                .where((s) {
+                  final status = s['status']?.toString();
+                  return status == null || status == 'active';
+                })
+                .map((s) {
                 return RekanKerjaItem(
                   uuid: (s['uuid'] ?? '').toString(),
                   name: (s['nama'] ?? '').toString(),

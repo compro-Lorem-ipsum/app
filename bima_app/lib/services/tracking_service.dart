@@ -233,6 +233,35 @@ class TrackingService {
     return prefs.getBool(_prefKeyOnDuty) ?? false;
   }
 
+  /// Dipanggil saat logout (lihat ProfileSayaController.logout) - PAKSA
+  /// hentikan tracking & buang SEMUA state lokalnya, termasuk antrian
+  /// titik GPS yang belum sempat terkirim kalau shift ini ternyata belum
+  /// di-checkout. Semua kunci di atas (`_prefKeyOnDuty`, `_prefKeyAbsensiUuid`,
+  /// dkk) TIDAK dinamai per-akun - sengaja global di SharedPreferences -
+  /// jadi kalau tidak dibersihkan di sini, akun lain yang login berikutnya
+  /// di device yang sama akan mewarisi status "sedang bertugas" dan
+  /// `absensi_uuid` milik akun sebelumnya (Beranda salah menampilkan
+  /// tombol Check-out, dan check-out yang ditekan akun baru bisa terkirim
+  /// memakai absensi_uuid akun lama).
+  ///
+  /// Beda dari [stopTracking] (dipanggil setelah checkout SUKSES, jadi
+  /// aman menganggap semua titik sudah tersimpan di server) - di sini
+  /// tidak ada jaminan itu, tapi mencegah kebocoran data lintas akun lebih
+  /// penting daripada menyelamatkan titik GPS shift yang ditinggalkan
+  /// begitu saja tanpa checkout.
+  Future<void> resetForLogout() async {
+    await pauseCapture();
+    _isTracking = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefKeyOnDuty, false);
+    await prefs.remove(_prefKeyAbsensiUuid);
+    await prefs.remove(_prefKeyLastLat);
+    await prefs.remove(_prefKeyLastLng);
+    await prefs.remove(_prefKeyLastSavedAt);
+    await prefs.remove(_prefKeyAccumDistance);
+    await QueueService().clearAll();
+  }
+
   /// KHUSUS DEBUGGING (tidak menambah UI apa pun): setelah check-out
   /// sukses, tulis peta interaktif (Leaflet.js, gaya folium) berisi rute
   /// titik-titik GPS sesi ini langsung ke folder Downloads publik (lewat

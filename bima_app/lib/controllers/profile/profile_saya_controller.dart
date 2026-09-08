@@ -9,6 +9,9 @@ import '../../services/auth_service.dart';
 import '../../services/documents_service.dart';
 import '../../services/panic_alert_polling_service.dart';
 import '../../services/satpam_profile_service.dart';
+import '../../services/tracking_service.dart';
+import '../pengumuman/pengumuman_controller.dart';
+import '../pesan/pesan_controller.dart';
 import 'tambah_kontak_darurat_controller.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
@@ -154,9 +157,27 @@ class ProfileSayaController extends GetxController {
     }
   }
 
+  /// Selain sesi login (AuthService), beberapa state lain juga per-akun
+  /// tapi TIDAK otomatis ter-reset kalau tidak dibersihkan di sini secara
+  /// eksplisit - kalau akun lain login berikutnya di device yang sama
+  /// (tanpa app benar-benar ditutup total), sisa-sisa ini akan salah
+  /// muncul seolah milik akun baru:
+  /// - TrackingService: status "sedang bertugas" & absensi_uuid tersimpan
+  ///   di kunci SharedPreferences GLOBAL (bukan per-akun) - lihat
+  ///   TrackingService.resetForLogout.
+  /// - PesanController/PengumumanController: didaftarkan `permanent: true`
+  ///   oleh LandingController supaya state baca konsisten di Beranda (lihat
+  ///   landing_controller.dart) - efek sampingnya, instance yang sama
+  ///   (berikut daftar pesan/pengumuman akun lama yang sudah ter-fetch)
+  ///   tetap hidup lintas logout. Dihapus total di sini (bukan cuma
+  ///   di-refresh) supaya LandingController membuat instance baru dan
+  ///   fetch ulang dari nol untuk akun berikutnya.
   Future<void> logout() async {
     await PanicAlertPollingService().stop();
+    await TrackingService().resetForLogout();
     SatpamProfileService().clear();
+    if (Get.isRegistered<PesanController>()) Get.delete<PesanController>(force: true);
+    if (Get.isRegistered<PengumumanController>()) Get.delete<PengumumanController>(force: true);
     await AuthService().logout();
     Get.offAllNamed('/login');
   }
