@@ -15,6 +15,7 @@ import 'package:heroicons/heroicons.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import '../../services/attendance_summary_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/satpam_profile_service.dart';
 import '../../services/tracking_service.dart';
@@ -38,9 +39,11 @@ class AbsenCheckinController extends GetxController {
   String get displayNip => (profile.value?['nip'] as String?) ?? '-';
   String get displayClient => (profile.value?['client'] as String?) ?? '-';
 
-  /// Pos utama satpam ini (GET /posts?type=utama) — dipakai untuk hitung
-  /// jarak & tampilan lokasi, menggantikan koordinat placeholder yang
-  /// sebelumnya hardcoded.
+  /// Pos yang berlaku untuk SHIFT saat ini (lihat _loadPosUtama) — dipakai
+  /// untuk hitung jarak & tampilan lokasi. BUKAN dari GET /posts?type=utama
+  /// (itu ternyata katalog semua pos type=utama yang ada, tidak terikat
+  /// jadwal satpam mana pun - blind-pick elemen pertamanya dulu sempat
+  /// bikin pos yang ditampilkan salah/tidak sesuai shift hari itu).
   final posUtama = Rxn<Map<String, dynamic>>();
   String get posNama => (posUtama.value?['nama'] as String?) ?? 'Pos Utama';
 
@@ -77,23 +80,66 @@ class AbsenCheckinController extends GetxController {
     profile.value = await SatpamProfileService().getProfile();
   }
 
+  /// Cari pos yang berlaku untuk shift SEKARANG dari GET /attendance/today
+  /// (field `shifts`, lihat AttendanceSummaryService.fetchShiftsToday),
+  /// lalu ambil detail lengkapnya (termasuk lat/lng, tidak ada di elemen
+  /// shift itu sendiri) lewat GET /posts/:uuid. Kalau tidak ada shift
+  /// terjadwal hari ini sama sekali, posUtama dibiarkan null — submit
+  /// check-in tetap akan ditolak server dengan error.code yang jelas
+  /// (NO_OPEN_SHIFT/NO_UTAMA_POS), jadi tidak perlu ditiru di sisi klien.
   Future<void> _loadPosUtama() async {
     try {
+      final shifts = await AttendanceSummaryService().fetchShiftsToday();
+      final shift = _pickCurrentShift(shifts);
+      final posRef = shift?['pos'];
+      final posUuid = posRef is Map ? posRef['uuid']?.toString() : null;
+      if (posUuid == null || posUuid.isEmpty) return;
+
       final token = await AuthService().getAccessToken();
       final response = await GetConnect().get(
-        '$BASE_API_URL/posts',
-        query: {'type': 'utama'},
+        '$BASE_API_URL/posts/$posUuid',
         headers: (token != null && token.isNotEmpty) ? {'Authorization': 'Bearer $token'} : null,
       );
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final data = ok && response.body is Map ? response.body['data'] : null;
-      if (data is List && data.isNotEmpty && data.first is Map) {
-        posUtama.value = Map<String, dynamic>.from(data.first as Map);
+      if (data is Map) {
+        posUtama.value = Map<String, dynamic>.from(data);
         _recomputeDistance();
       }
     } catch (e) {
-      debugPrint('AbsenCheckinController: gagal ambil pos utama: $e');
+      debugPrint('AbsenCheckinController: gagal ambil pos untuk shift hari ini: $e');
     }
+  }
+
+  /// Pilih shift yang jendela waktunya ([starts_at, ends_at], UTC)
+  /// mencakup sekarang. Kalau tidak ada yang sedang aktif (mis. dibuka
+  /// sedikit sebelum/sesudah jam shift), fallback ke shift dengan
+  /// `starts_at` paling dekat dengan sekarang supaya tetap ada preview pos
+  /// yang masuk akal, daripada kosong sama sekali.
+  Map<String, dynamic>? _pickCurrentShift(List<Map<String, dynamic>> shifts) {
+    if (shifts.isEmpty) return null;
+    final now = DateTime.now().toUtc();
+
+    for (final shift in shifts) {
+      final starts = DateTime.tryParse((shift['starts_at'] ?? '').toString())?.toUtc();
+      final ends = DateTime.tryParse((shift['ends_at'] ?? '').toString())?.toUtc();
+      if (starts != null && ends != null && !now.isBefore(starts) && !now.isAfter(ends)) {
+        return shift;
+      }
+    }
+
+    Map<String, dynamic>? closest;
+    Duration? closestDiff;
+    for (final shift in shifts) {
+      final starts = DateTime.tryParse((shift['starts_at'] ?? '').toString())?.toUtc();
+      if (starts == null) continue;
+      final diff = starts.difference(now).abs();
+      if (closestDiff == null || diff < closestDiff) {
+        closest = shift;
+        closestDiff = diff;
+      }
+    }
+    return closest ?? shifts.first;
   }
 
   void _recomputeDistance() {

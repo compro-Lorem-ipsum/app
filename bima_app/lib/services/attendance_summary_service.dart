@@ -6,10 +6,17 @@
 // GET /attendance/working-hours -> { data: { today: {minutes,hours,
 // shifts}, this_month: {...}, all_time: {...}, since } }
 //
-// GET /attendance/today -> { data: [...], meta: { date } } — LIST (bisa
-// >1 kalau ada dua shift sehari, meski jarang); elemen pertama dipakai
-// karena kartu ringkasan cuma menampilkan satu status. List kosong berarti
-// belum ada absensi hari ini (belum check-in).
+// GET /attendance/today -> { data: { records: [...], shifts: [...] },
+// meta: { date } } — BUKAN list langsung (asumsi lama salah, sempat bikin
+// fetchToday() diam-diam selalu gagal parse karena cek `data is List`
+// padahal `data` itu object). Bentuk asli, dikonfirmasi lewat respons
+// nyata:
+// - `records`: entri absensi (check-in/out) yang SUDAH tercatat hari ini.
+// - `shifts`: jadwal shift hari ini (bisa >1), tiap elemen punya
+//   `starts_at`/`ends_at` (ISO UTC), `pos` { uuid, nama } KHUSUS untuk
+//   shift itu (tanpa lat/lng — perlu GET /posts/:uuid terpisah kalau
+//   butuh koordinat, lihat AbsenCheckinController), dan `attendance`
+//   (null kalau shift itu belum di-checkin).
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -42,20 +49,41 @@ class AttendanceSummaryService {
     }
   }
 
-  /// Record absensi hari ini, atau null kalau belum ada (belum check-in).
-  Future<Map<String, dynamic>?> fetchToday() async {
+  Future<Map<String, dynamic>?> _fetchTodayRaw() async {
     try {
       final response = await GetConnect().get('$_baseApiUrl/attendance/today', headers: await _authHeaders());
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
-      final data = response.body is Map ? response.body['data'] : null;
-      if (ok && data is List && data.isNotEmpty && data.first is Map) {
-        return Map<String, dynamic>.from(data.first as Map);
-      }
-      return null;
+      final data = ok && response.body is Map ? response.body['data'] : null;
+      return data is Map ? Map<String, dynamic>.from(data) : null;
     } catch (e) {
-      debugPrint('AttendanceSummaryService: gagal memuat absensi hari ini: $e');
+      debugPrint('AttendanceSummaryService: gagal memuat /attendance/today: $e');
       return null;
     }
+  }
+
+  /// Record absensi hari ini (dari `records`), atau null kalau belum ada
+  /// (belum check-in).
+  Future<Map<String, dynamic>?> fetchToday() async {
+    final data = await _fetchTodayRaw();
+    final records = data?['records'];
+    if (records is List && records.isNotEmpty && records.first is Map) {
+      return Map<String, dynamic>.from(records.first as Map);
+    }
+    return null;
+  }
+
+  /// Jadwal shift hari ini (dari `shifts`) - dipakai AbsenCheckinController
+  /// untuk menentukan pos yang benar-benar berlaku SEKARANG, bukan cuma
+  /// pos pertama dari katalog `/posts?type=utama` yang tidak terikat
+  /// jadwal sama sekali. List kosong kalau memang tidak ada shift
+  /// terjadwal hari ini.
+  Future<List<Map<String, dynamic>>> fetchShiftsToday() async {
+    final data = await _fetchTodayRaw();
+    final shifts = data?['shifts'];
+    if (shifts is List) {
+      return shifts.whereType<Map>().map((s) => Map<String, dynamic>.from(s)).toList();
+    }
+    return [];
   }
 
   static String formatJamMenit(num? totalMinutes) {
