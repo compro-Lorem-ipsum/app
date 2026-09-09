@@ -28,6 +28,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'gps_task_handler.dart';
@@ -71,8 +72,21 @@ class TrackingService {
     debugPrint('TrackingService: tracking dimulai untuk $absensiUuid');
   }
 
-  /// Minta izin lokasi (termasuk latar belakang) dan izin notifikasi
-  /// (Android 13+, wajib supaya notifikasi foreground service tampil).
+  /// Minta izin lokasi (termasuk latar belakang), izin notifikasi
+  /// (Android 13+, wajib supaya notifikasi foreground service tampil), dan
+  /// pengecualian battery optimization.
+  ///
+  /// Baris terakhir (`ignoreBatteryOptimizations`) itu KRUSIAL — manifest
+  /// sudah minta izin `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` dari dulu,
+  /// tapi izin di manifest CUMA mendaftarkan kemungkinannya, tidak pernah
+  /// benar-benar memintanya ke pengguna. Tanpa dialog sistem ini disetujui,
+  /// OEM dengan power management agresif (Samsung/Xiaomi/Oppo/Vivo dkk,
+  /// LEBIH agresif dari Android stok) bebas membunuh foreground service GPS
+  /// ini kapan saja setelah app di-minimize/ditutup — walau
+  /// `foregroundServiceType="location"` sudah benar dipasang. WorkManager
+  /// heartbeat (lapis ke-4, lihat workmanager_callback.dart) tetap jalan
+  /// sebagai jaring pengaman, tapi cuma tiap >=15 menit - jauh lebih jarang
+  /// dari tracking real-time yang seharusnya.
   Future<void> _ensurePermissions() async {
     final notifPermission = await FlutterForegroundTask.checkNotificationPermission();
     if (notifPermission != NotificationPermission.granted) {
@@ -87,6 +101,16 @@ class TrackingService {
       // Android 11+ mewajibkan izin lokasi "sepanjang waktu" diminta
       // terpisah, setelah izin "saat digunakan" sudah disetujui lebih dulu.
       permission = await Geolocator.requestPermission();
+    }
+
+    try {
+      if (!await ph.Permission.ignoreBatteryOptimizations.isGranted) {
+        await ph.Permission.ignoreBatteryOptimizations.request();
+      }
+    } catch (e) {
+      // Non-Android (atau OEM yang tidak mendukung dialog ini) - jangan
+      // sampai gagal di sini menghalangi proses check-in.
+      debugPrint('TrackingService: gagal minta pengecualian battery optimization: $e');
     }
   }
 
