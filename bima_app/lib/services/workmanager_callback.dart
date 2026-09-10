@@ -34,6 +34,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'auth_service.dart';
+import 'api_service.dart';
 import 'panic_alert_prefs_keys.dart';
 import 'queue_service.dart';
 import 'tracking_prefs_keys.dart';
@@ -54,6 +55,10 @@ void callbackDispatcher() {
       await dotenv.load(fileName: '.env');
     } catch (e) {
       debugPrint('WorkManager: gagal load .env (diabaikan): $e');
+    }
+    
+    if (!Get.isRegistered<ApiService>()) {
+      Get.put(ApiService());
     }
 
     if (task == kGpsHeartbeatTask) {
@@ -96,14 +101,7 @@ Future<void> _runGpsHeartbeat() async {
 /// di dokumentasi API, dibaca defensif dengan beberapa kemungkinan nama.
 Future<void> _runPanicAlertHeartbeat() async {
   try {
-    final token = await AuthService().getAccessToken();
-    if (token == null || token.isEmpty) return;
-
-    final baseUrl = dotenv.env['BASE_API_URL'];
-    final response = await GetConnect().get(
-      '$baseUrl/alerts/active',
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final response = await ApiService.to.get('/alerts/active');
 
     final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
     final data = ok && response.body is Map ? response.body['data'] : null;

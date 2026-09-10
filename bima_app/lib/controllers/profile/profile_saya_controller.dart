@@ -13,6 +13,7 @@ import '../../services/tracking_service.dart';
 import '../pengumuman/pengumuman_controller.dart';
 import '../pesan/pesan_controller.dart';
 import 'tambah_kontak_darurat_controller.dart';
+import '../../services/api_service.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
@@ -120,11 +121,7 @@ class ProfileSayaController extends GetxController {
   Future<void> loadKontakDarurat() async {
     isLoadingKontak.value = true;
     try {
-      final token = await AuthService().getAccessToken();
-      final response = await GetConnect().get(
-        '$_baseApiUrl/emergency-contacts',
-        headers: (token != null && token.isNotEmpty) ? {'Authorization': 'Bearer $token'} : null,
-      );
+      final response = await ApiService.to.get('/emergency-contacts');
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final data = response.body is Map ? response.body['data'] : null;

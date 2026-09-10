@@ -16,6 +16,7 @@ import 'package:http_parser/http_parser.dart';
 import '../../services/auth_service.dart';
 import '../../services/documents_service.dart';
 import '../../widgets/success_screen.dart';
+import '../../services/api_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
@@ -69,10 +70,7 @@ class UnggahBerkasController extends GetxController {
     _fetchExistingDocuments();
   }
 
-  Future<Map<String, String>> _authHeader() async {
-    final token = await AuthService().getAccessToken();
-    return token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : {};
-  }
+
 
   /// [preserveLocalFileInfo]: true saat dipanggil sesaat setelah [upload]
   /// berhasil — supaya nama file & ukuran hasil pilih lokal yang baru saja
@@ -148,7 +146,7 @@ class UnggahBerkasController extends GetxController {
     processingKey.value = slot.key;
     try {
       // Langkah 1: minta upload-link.
-      final linkRes = await GetConnect().post('$BASE_API_URL/documents/upload-url', {}, headers: await _authHeader());
+      final linkRes = await ApiService.to.post('/documents/upload-url', {});
       final linkOk = linkRes.statusCode != null && linkRes.statusCode! >= 200 && linkRes.statusCode! < 300;
       final linkData = linkOk && linkRes.body is Map ? linkRes.body['data'] as Map<String, dynamic>? : null;
       if (linkData == null) {
@@ -176,12 +174,9 @@ class UnggahBerkasController extends GetxController {
       }
 
       // Langkah 3: simpan referensinya di backend.
-      final saveHeaders = await _authHeader();
-      saveHeaders['Content-Type'] = 'application/json';
-      final saveResponse = await GetConnect().post(
-        '$BASE_API_URL/documents',
+      final saveResponse = await ApiService.to.post(
+        '/documents',
         {'type': slot.key, 'object_uuid': objectUuid},
-        headers: saveHeaders,
       );
       final saveOk = saveResponse.statusCode != null && saveResponse.statusCode! >= 200 && saveResponse.statusCode! < 300;
       if (!saveOk) {
@@ -257,7 +252,7 @@ class UnggahBerkasController extends GetxController {
 
     processingKey.value = slot.key;
     try {
-      final response = await GetConnect().delete('$BASE_API_URL/documents/$uuid', headers: await _authHeader());
+      final response = await ApiService.to.delete('/documents/$uuid');
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       if (!ok) {
         _showError('Gagal Menghapus', 'Tidak dapat menghapus dokumen, coba lagi.');

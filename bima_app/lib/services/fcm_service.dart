@@ -42,6 +42,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
 
 import 'auth_service.dart';
+import 'api_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -150,10 +151,9 @@ class FcmService {
     if (accessToken == null || accessToken.isEmpty) return;
 
     try {
-      await GetConnect().post(
-        '$_baseApiUrl/notifications/register',
+      await ApiService.to.post(
+        '/notifications/register',
         {'fid': fid, 'platform': 'android'},
-        headers: {'Authorization': 'Bearer $accessToken', 'Content-Type': 'application/json'},
       );
     } catch (e) {
       debugPrint('FcmService: gagal mendaftarkan token FCM: $e');

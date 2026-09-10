@@ -13,9 +13,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
-import '../../services/auth_service.dart';
 import '../../widgets/app_theme.dart';
 import '../../widgets/primary_button.dart';
+import '../../services/api_service.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
@@ -77,23 +77,15 @@ class LaporKejadianController extends GetxController {
     }
   }
 
-  Future<Map<String, String>?> _authHeaders({bool json = false}) async {
-    final token = await AuthService().getAccessToken();
-    if (token == null || token.isEmpty) return json ? {'Content-Type': 'application/json'} : null;
-    return {
-      'Authorization': 'Bearer $token',
-      if (json) 'Content-Type': 'application/json',
-    };
-  }
+
 
   /// Upload satu foto lewat kontrak 2-langkah: POST
   /// /event-reports/upload-url untuk reservasi object, lalu POST
   /// multipart ke GCS (fields dulu, file terakhir).
   Future<String> _uploadPhotoAndGetObjectUuid(String path) async {
-    final linkRes = await GetConnect().post(
-      '$_baseApiUrl/event-reports/upload-url',
+    final linkRes = await ApiService.to.post(
+      '/event-reports/upload-url',
       {'ext': 'jpg'},
-      headers: await _authHeaders(json: true),
     );
     final linkOk = linkRes.statusCode != null && linkRes.statusCode! >= 200 && linkRes.statusCode! < 300;
     final linkData = linkRes.body is Map ? linkRes.body['data'] as Map<String, dynamic>? : null;
@@ -141,15 +133,14 @@ class LaporKejadianController extends GetxController {
         objectUuids.add(await _uploadPhotoAndGetObjectUuid(path));
       }
 
-      final response = await GetConnect().post(
-        '$_baseApiUrl/event-reports',
+      final response = await ApiService.to.post(
+        '/event-reports',
         {
           'lat': latitude.value,
           'lng': longitude.value,
           'description': description,
           if (objectUuids.isNotEmpty) 'object_uuids': objectUuids,
         },
-        headers: await _authHeaders(json: true),
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;

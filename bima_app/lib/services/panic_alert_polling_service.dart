@@ -41,6 +41,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 import 'panic_alert_prefs_keys.dart';
 import 'workmanager_callback.dart';
+import 'api_service.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
@@ -88,13 +89,7 @@ class PanicAlertPollingService {
     if (_isPolling) return;
     _isPolling = true;
     try {
-      final token = await AuthService().getAccessToken();
-      if (token == null || token.isEmpty) return;
-
-      final response = await GetConnect().get(
-        '$_baseApiUrl/alerts/active',
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final response = await ApiService.to.get('/alerts/active');
 
       if (response.statusCode == 401) {
         // Sesi sudah tidak valid — berhenti polling supaya tidak terus

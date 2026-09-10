@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/app_theme.dart';
 import '../../widgets/success_screen.dart';
+import '../../services/api_service.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
@@ -41,14 +42,7 @@ class PengajuanController extends GetxController {
     loadRequests();
   }
 
-  Future<Map<String, String>?> _authHeaders({bool json = false}) async {
-    final token = await AuthService().getAccessToken();
-    if (token == null || token.isEmpty) return json ? {'Content-Type': 'application/json'} : null;
-    return {
-      'Authorization': 'Bearer $token',
-      if (json) 'Content-Type': 'application/json',
-    };
-  }
+
 
   Future<void> loadRequests() async {
     isLoading.value = true;
@@ -79,10 +73,9 @@ class PengajuanController extends GetxController {
 
   Future<({List<Map<String, dynamic>> items, String? nextCursor, bool hasMore})> _fetchPage({String? cursor}) async {
     try {
-      final response = await GetConnect().get(
-        '$_baseApiUrl/requests',
+      final response = await ApiService.to.get(
+        '/requests',
         query: {if (cursor != null) 'cursor': cursor},
-        headers: await _authHeaders(),
       );
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final body = ok && response.body is Map ? response.body as Map : null;
@@ -230,15 +223,14 @@ class PengajuanController extends GetxController {
 
     isSubmitting.value = true;
     try {
-      final response = await GetConnect().post(
-        '$_baseApiUrl/requests',
+      final response = await ApiService.to.post(
+        '/requests',
         {
           'type': _jenisToApi[jenis],
           'description': description,
           'start_date': _isoDate(mulai),
           'end_date': _isoDate(selesai),
         },
-        headers: await _authHeaders(json: true),
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;

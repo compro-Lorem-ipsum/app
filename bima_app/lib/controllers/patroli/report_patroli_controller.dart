@@ -27,6 +27,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
@@ -73,14 +74,7 @@ class ReportPatroliController extends GetxController {
     super.onClose();
   }
 
-  Future<Map<String, String>?> _authHeaders({bool json = false}) async {
-    final token = await AuthService().getAccessToken();
-    if (token == null || token.isEmpty) return json ? {'Content-Type': 'application/json'} : null;
-    return {
-      'Authorization': 'Bearer $token',
-      if (json) 'Content-Type': 'application/json',
-    };
-  }
+
 
   Future<void> _loadPersonnel() async {
     final user = await AuthService().getUser();
@@ -130,10 +124,9 @@ class ReportPatroliController extends GetxController {
     listPos.clear();
 
     try {
-      final res = await GetConnect().get(
-        '$BASE_API_URL/posts',
+      final res = await ApiService.to.get(
+        '/posts',
         query: {'type': 'jaga'},
-        headers: await _authHeaders(),
       );
       final data = res.body is Map ? res.body['data'] : null;
       if (data is List) {
@@ -167,10 +160,9 @@ class ReportPatroliController extends GetxController {
   /// file terakhir). Mengembalikan object_uuid untuk disertakan di body
   /// POST /patrols.
   Future<String> _uploadPhotoAndGetObjectUuid(String path) async {
-    final linkRes = await GetConnect().post(
-      '$BASE_API_URL/patrols/upload-url',
+    final linkRes = await ApiService.to.post(
+      '/patrols/upload-url',
       {'ext': 'jpg'},
-      headers: await _authHeaders(json: true),
     );
     final linkOk = linkRes.statusCode != null && linkRes.statusCode! >= 200 && linkRes.statusCode! < 300;
     final linkData = linkRes.body is Map ? linkRes.body['data'] as Map<String, dynamic>? : null;
@@ -250,10 +242,9 @@ class ReportPatroliController extends GetxController {
         "object_uuids": objectUuids,
       };
 
-      final reportRes = await GetConnect().post(
-        "$BASE_API_URL/patrols",
+      final reportRes = await ApiService.to.post(
+        "/patrols",
         payload,
-        headers: await _authHeaders(json: true),
       );
 
       final ok = reportRes.statusCode != null && reportRes.statusCode! >= 200 && reportRes.statusCode! < 300;

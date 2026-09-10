@@ -25,6 +25,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
@@ -76,11 +77,7 @@ class PesanController extends GetxController {
     await fetchUnreadCount();
   }
 
-  Future<Map<String, String>?> _authHeaders() async {
-    final token = await AuthService().getAccessToken();
-    if (token == null || token.isEmpty) return null;
-    return {'Authorization': 'Bearer $token'};
-  }
+
 
   Future<Set<String>> _loadLocallyReadUuids() async {
     final prefs = await SharedPreferences.getInstance();
@@ -130,10 +127,9 @@ class PesanController extends GetxController {
   Future<({List<PesanItem> items, String? nextCursor, bool hasMore})> _fetchPage({String? cursor}) async {
     try {
       final locallyRead = await _loadLocallyReadUuids();
-      final response = await GetConnect().get(
-        '$BASE_API_URL/messages',
+      final response = await ApiService.to.get(
+        '/messages',
         query: {if (cursor != null) 'cursor': cursor},
-        headers: await _authHeaders(),
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
@@ -171,9 +167,8 @@ class PesanController extends GetxController {
 
   Future<void> fetchUnreadCount() async {
     try {
-      final response = await GetConnect().get(
-        '$BASE_API_URL/messages/unread-count',
-        headers: await _authHeaders(),
+      final response = await ApiService.to.get(
+        '/messages/unread-count',
       );
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final data = ok && response.body is Map ? response.body['data'] : null;
@@ -251,7 +246,7 @@ class PesanController extends GetxController {
   Future<void> _markRead(String uuid) async {
     if (uuid.isEmpty) return;
     try {
-      await GetConnect().post('$BASE_API_URL/messages/$uuid/read', {}, headers: await _authHeaders());
+      await ApiService.to.post('/messages/$uuid/read', {});
     } catch (e) {
       debugPrint('PesanController: gagal menandai pesan terbaca: $e');
     }

@@ -25,6 +25,7 @@ import 'package:get/get.dart';
 
 import '../../services/attendance_summary_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
@@ -99,11 +100,7 @@ class AktifitasSayaController extends GetxController {
     loadActivity();
   }
 
-  Future<Map<String, String>?> _authHeaders() async {
-    final token = await AuthService().getAccessToken();
-    if (token == null || token.isEmpty) return null;
-    return {'Authorization': 'Bearer $token'};
-  }
+
 
   Future<void> loadActivity() async {
     isLoading.value = true;
@@ -194,10 +191,9 @@ Future<void> _loadMoreAttendancePage() async {
 
   Future<({List<_DatedEntry> items, String? nextCursor, bool hasMore})> _fetchAttendancePage({String? cursor}) async {
     try {
-      final response = await GetConnect().get(
-        '$_baseApiUrl/attendance',
+      final response = await ApiService.to.get(
+        '/attendance',
         query: {if (cursor != null) 'cursor': cursor},
-        headers: await _authHeaders(),
       );
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final body = ok && response.body is Map ? response.body as Map : null;
@@ -253,10 +249,9 @@ Future<void> _loadMoreAttendancePage() async {
 
   Future<({List<_DatedEntry> items, String? nextCursor, bool hasMore})> _fetchPatrolPage({String? cursor}) async {
     try {
-      final response = await GetConnect().get(
-        '$_baseApiUrl/patrols',
+      final response = await ApiService.to.get(
+        '/patrols',
         query: {if (cursor != null) 'cursor': cursor},
-        headers: await _authHeaders(),
       );
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final body = ok && response.body is Map ? response.body as Map : null;

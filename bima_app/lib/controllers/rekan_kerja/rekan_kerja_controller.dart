@@ -14,6 +14,7 @@ import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
@@ -91,11 +92,9 @@ class RekanKerjaController extends GetxController {
 
   Future<({List<RekanKerjaItem> items, String? nextCursor, bool hasMore})> _fetchPage({String? cursor}) async {
     try {
-      final token = await AuthService().getAccessToken();
-      final response = await GetConnect().get(
-        '$BASE_API_URL/satpam/colleagues',
+      final response = await ApiService.to.get(
+        '/satpam/colleagues',
         query: {if (cursor != null) 'cursor': cursor},
-        headers: token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
@@ -174,10 +173,8 @@ class RekanKerjaController extends GetxController {
     if (_isFetchingContact.value) return;
     _isFetchingContact.value = true;
     try {
-      final token = await AuthService().getAccessToken();
-      final response = await GetConnect().get(
-        '$BASE_API_URL/satpam/colleagues/${item.uuid}',
-        headers: token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
+      final response = await ApiService.to.get(
+        '/satpam/colleagues/${item.uuid}',
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;

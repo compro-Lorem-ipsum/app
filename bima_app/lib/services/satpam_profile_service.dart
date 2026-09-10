@@ -11,6 +11,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 import 'auth_service.dart';
+import 'api_service.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
@@ -37,11 +38,7 @@ class SatpamProfileService {
 
   Future<Map<String, dynamic>?> _fetch() async {
     try {
-      final token = await AuthService().getAccessToken();
-      final response = await GetConnect().get(
-        '$_baseApiUrl/satpam/me',
-        headers: (token != null && token.isNotEmpty) ? {'Authorization': 'Bearer $token'} : null,
-      );
+      final response = await ApiService.to.get('/satpam/me');
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final data = response.body is Map ? response.body['data'] : null;

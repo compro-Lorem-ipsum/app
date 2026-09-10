@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/auth_service.dart';
 import '../../views/pengumuman/isi_pengumuman_view.dart';
+import '../../services/api_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
@@ -51,11 +52,7 @@ class PengumumanController extends GetxController {
     isLoading.value = true;
     try {
       final readUuids = await _loadReadUuids();
-      final token = await AuthService().getAccessToken();
-      final response = await GetConnect().get(
-        '$BASE_API_URL/announcements',
-        headers: token != null && token.isNotEmpty ? {'Authorization': 'Bearer $token'} : null,
-      );
+      final response = await ApiService.to.get('/announcements');
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final data = ok && response.body is Map ? response.body['data'] : null;

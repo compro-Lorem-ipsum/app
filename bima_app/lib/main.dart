@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import 'services/auth_service.dart';
+import 'services/api_service.dart';
 import 'services/fcm_service.dart';
 import 'services/panic_alert_notification_service.dart';
 import 'services/panic_alert_polling_service.dart';
@@ -106,6 +107,9 @@ Future<void> main() async {
   // bisa masuk sebelum satpam sempat login pertama kali. Kalau sesi login
   // sudah ada, token FCM saat ini juga langsung didaftarkan ulang di sini.
   await FcmService().init();
+
+  // Daftarkan ApiService secara global agar bisa dipanggil lewat ApiService.to
+  Get.put(ApiService());
 
   runApp(MyApp(initialRoute: isLoggedIn ? '/' : '/login', pendingNotificationPayload: pendingPayload));
 }

@@ -15,6 +15,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/api_service.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
@@ -87,11 +88,7 @@ class TambahKontakDaruratController extends GetxController {
     );
   }
 
-  Future<Map<String, String>?> _authHeaders() async {
-    final token = await AuthService().getAccessToken();
-    if (token == null || token.isEmpty) return null;
-    return {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'};
-  }
+
 
   Future<void> handleSimpan() async {
     if (isSubmitting.value) return;
@@ -117,12 +114,9 @@ class TambahKontakDaruratController extends GetxController {
 
     isSubmitting.value = true;
     try {
-      final headers = await _authHeaders();
-      final payload = {'nama': nama, 'hubungan': hubunganApi, 'kontak': nomorHp};
-
       final response = isEdit
-          ? await GetConnect().patch('$_baseApiUrl/emergency-contacts/$_contactId', payload, headers: headers)
-          : await GetConnect().post('$_baseApiUrl/emergency-contacts', payload, headers: headers);
+          ? await ApiService.to.patch('/emergency-contacts/$_contactId', payload)
+          : await ApiService.to.post('/emergency-contacts', payload);
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       if (ok) {
@@ -171,8 +165,7 @@ class TambahKontakDaruratController extends GetxController {
 
     isSubmitting.value = true;
     try {
-      final headers = await _authHeaders();
-      final response = await GetConnect().delete('$_baseApiUrl/emergency-contacts/$contactId', headers: headers);
+      final response = await ApiService.to.delete('/emergency-contacts/$contactId');
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       if (ok) {

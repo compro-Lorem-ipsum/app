@@ -13,6 +13,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/satpam_profile_service.dart';
+import '../../services/api_service.dart';
 import '../../widgets/confirm_dialog.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
@@ -125,14 +126,9 @@ class PanicAlertController extends GetxController {
 
     isSending.value = true;
     try {
-      final token = await AuthService().getAccessToken();
-      final response = await GetConnect().post(
-        '$_baseApiUrl/alerts',
+      final response = await ApiService.to.post(
+        '/alerts',
         {'lat': lat, 'lng': lng},
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
       );
 
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;

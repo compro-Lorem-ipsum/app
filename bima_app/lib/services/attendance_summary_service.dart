@@ -23,6 +23,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 import 'auth_service.dart';
+import 'api_service.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
@@ -31,15 +32,11 @@ class AttendanceSummaryService {
   static final AttendanceSummaryService _instance = AttendanceSummaryService._internal();
   factory AttendanceSummaryService() => _instance;
 
-  Future<Map<String, String>?> _authHeaders() async {
-    final token = await AuthService().getAccessToken();
-    if (token == null || token.isEmpty) return null;
-    return {'Authorization': 'Bearer $token'};
-  }
+
 
   Future<Map<String, dynamic>?> fetchWorkingHours() async {
     try {
-      final response = await GetConnect().get('$_baseApiUrl/attendance/working-hours', headers: await _authHeaders());
+      final response = await ApiService.to.get('/attendance/working-hours');
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final data = response.body is Map ? response.body['data'] : null;
       return (ok && data is Map) ? Map<String, dynamic>.from(data) : null;
@@ -51,7 +48,7 @@ class AttendanceSummaryService {
 
   Future<Map<String, dynamic>?> _fetchTodayRaw() async {
     try {
-      final response = await GetConnect().get('$_baseApiUrl/attendance/today', headers: await _authHeaders());
+      final response = await ApiService.to.get('/attendance/today');
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final data = ok && response.body is Map ? response.body['data'] : null;
       return data is Map ? Map<String, dynamic>.from(data) : null;

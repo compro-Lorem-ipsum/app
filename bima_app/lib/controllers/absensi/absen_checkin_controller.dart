@@ -21,6 +21,7 @@ import '../../services/satpam_profile_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/workmanager_callback.dart';
 import '../../widgets/success_screen.dart';
+import '../../services/api_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
 
@@ -95,11 +96,7 @@ class AbsenCheckinController extends GetxController {
       final posUuid = posRef is Map ? posRef['uuid']?.toString() : null;
       if (posUuid == null || posUuid.isEmpty) return;
 
-      final token = await AuthService().getAccessToken();
-      final response = await GetConnect().get(
-        '$BASE_API_URL/posts/$posUuid',
-        headers: (token != null && token.isNotEmpty) ? {'Authorization': 'Bearer $token'} : null,
-      );
+      final response = await ApiService.to.get('/posts/$posUuid');
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       final data = ok && response.body is Map ? response.body['data'] : null;
       if (data is Map) {
@@ -266,18 +263,14 @@ class AbsenCheckinController extends GetxController {
       final objectUuid = await _uploadSelfieAndGetObjectUuid(token);
 
       final endpoint = isCheckIn ? 'check-in' : 'check-out';
-      final response = await GetConnect().post(
-        '$BASE_API_URL/attendance/$endpoint',
+      final response = await ApiService.to.post(
+        '/attendance/$endpoint',
         {
           'lat': latitude.value,
           'lng': longitude.value,
           'object_uuid': objectUuid,
           'accuracy_m': accuracyMeter.value,
           if (trackPolyline != null) 'polyline': trackPolyline,
-        },
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
         },
       );
 
@@ -321,13 +314,9 @@ class AbsenCheckinController extends GetxController {
   Future<String> _uploadSelfieAndGetObjectUuid(String token) async {
     final ext = photoPath.value.contains('.') ? photoPath.value.split('.').last.toLowerCase() : 'jpg';
 
-    final linkRes = await GetConnect().post(
-      '$BASE_API_URL/attendance/upload-url',
+    final linkRes = await ApiService.to.post(
+      '/attendance/upload-url',
       {'ext': ext},
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
     );
     final linkOk = linkRes.statusCode != null && linkRes.statusCode! >= 200 && linkRes.statusCode! < 300;
     final linkData = linkRes.body is Map ? linkRes.body['data'] as Map<String, dynamic>? : null;
