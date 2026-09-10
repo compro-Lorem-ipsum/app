@@ -180,13 +180,12 @@ class AuthService {
   /// panggilan itu — kalau request gagal (offline dsb.), pengguna tetap
   /// harus bisa keluar dari akunnya di HP-nya sendiri.
   Future<void> logout() async {
-    final token = await getAccessToken();
-    if (token != null && token.isNotEmpty) {
+    final refreshToken = await getRefreshToken();
+    if (refreshToken != null && refreshToken.isNotEmpty) {
       try {
         await GetConnect().post(
           '$_baseUrl/auth/logout',
-          {},
-          headers: {'Authorization': 'Bearer $token'},
+          {'refresh_token': refreshToken},
         );
       } catch (e) {
         debugPrint('AuthService: gagal memberi tahu server saat logout (diabaikan): $e');
@@ -262,8 +261,7 @@ class AuthService {
 
     final response = await GetConnect().post(
       '$_baseUrl/auth/refresh',
-      {},
-      headers: {'Authorization': 'Bearer $refreshToken'},
+      {'refresh_token': refreshToken},
     );
 
     final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
