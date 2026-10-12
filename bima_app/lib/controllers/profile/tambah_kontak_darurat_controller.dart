@@ -111,6 +111,14 @@ class TambahKontakDaruratController extends GetxController {
     }
 
     final hubunganApi = _hubunganToApi[hubunganLabel]!;
+    // Field sesuai kontrak POST/PATCH /emergency-contacts (lihat juga
+    // ProfileSayaController._fromApi yang membaca balik field yang sama:
+    // nama, hubungan, kontak).
+    final payload = {
+      'nama': nama,
+      'hubungan': hubunganApi,
+      'kontak': nomorHp,
+    };
 
     isSubmitting.value = true;
     try {
