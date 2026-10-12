@@ -24,6 +24,9 @@ class DocumentSlot {
   final String key;
   final String title;
   final String subtitle;
+
+  /// true = boleh tidak diunggah (tidak dihitung saat cek kelengkapan).
+  final bool optional;
   bool uploaded;
   String? documentUuid;
   String? fileName;
@@ -38,6 +41,7 @@ class DocumentSlot {
     required this.key,
     required this.title,
     required this.subtitle,
+    this.optional = false,
     this.uploaded = false,
     this.documentUuid,
     this.fileName,
@@ -53,7 +57,7 @@ class UnggahBerkasController extends GetxController {
   final slots = <DocumentSlot>[
     DocumentSlot(key: 'ktp', title: 'KTP', subtitle: 'KTP Yang Masih Berlaku'),
     DocumentSlot(key: 'bpjs', title: 'BPJS', subtitle: 'BPJS Kesehatan / Ketenagakerjaan'),
-    DocumentSlot(key: 'npwp', title: 'NPWP', subtitle: 'Nomor Pokok Wajib Pajak'),
+    DocumentSlot(key: 'npwp', title: 'NPWP', subtitle: 'Nomor Pokok Wajib Pajak', optional: true),
   ].obs;
 
   /// Key slot yang sedang diproses (upload/hapus) — dipakai untuk
@@ -62,7 +66,8 @@ class UnggahBerkasController extends GetxController {
 
   int get uploadedCount => slots.where((s) => s.uploaded).length;
 
-  bool get isComplete => uploadedCount == slots.length;
+  /// Lengkap = semua slot wajib sudah terunggah (slot opsional diabaikan).
+  bool get isComplete => slots.where((s) => !s.optional).every((s) => s.uploaded);
 
   @override
   void onInit() {

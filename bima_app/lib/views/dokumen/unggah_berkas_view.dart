@@ -13,6 +13,19 @@ import '../../widgets/primary_button.dart';
 class UnggahBerkasView extends StatelessWidget {
   const UnggahBerkasView({super.key});
 
+  /// NPWP bersifat opsional: boleh tidak diunggah.
+  bool _isOptional(DocumentSlot slot) {
+    return '${slot.key}'.toLowerCase().contains('npwp') ||
+        slot.title.toLowerCase().contains('npwp');
+  }
+
+  /// Berkas wajib (selain yang opsional) sudah terunggah semua.
+  bool _requiredComplete(UnggahBerkasController controller) {
+    return controller.slots
+        .where((slot) => !_isOptional(slot))
+        .every((slot) => slot.uploaded);
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = Get.find<UnggahBerkasController>();
@@ -52,8 +65,8 @@ class UnggahBerkasView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(25, 0, 25, 24),
               child: Obx(() => PrimaryButton(
-                    label: controller.isComplete ? 'Simpan Berkas' : 'Unggah Berkas',
-                    onPressed: controller.isComplete ? controller.submit : null,
+                    label: _requiredComplete(controller) ? 'Simpan Berkas' : 'Unggah Berkas',
+                    onPressed: _requiredComplete(controller) ? controller.submit : null,
                   )),
             ),
           ],
@@ -155,7 +168,10 @@ class UnggahBerkasView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(slot.title, style: AppText.semiBold.copyWith(fontSize: 14, color: Colors.black)),
+          Text(
+            _isOptional(slot) ? '${slot.title} (Opsional)' : slot.title,
+            style: AppText.semiBold.copyWith(fontSize: 14, color: Colors.black),
+          ),
           const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
