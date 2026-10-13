@@ -622,7 +622,7 @@ class AbsenCheckinController extends GetxController {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFFEDD5))),
               child: Text(
-                resultData.value?['message'] ?? "",
+                "Saat ini belum ada shift yang dibuka untuk check-in. Check-in dibuka satu jam sebelum shift dimulai.",
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFFD97706)),
               ),

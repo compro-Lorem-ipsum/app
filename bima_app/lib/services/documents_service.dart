@@ -1,4 +1,4 @@
-// Status dokumen wajib satpam (KTP/BPJS/NPWP) dari GET /documents.
+// Status dokumen wajib satpam (KTP/BPJS) dari GET /documents.
 // Dipakai bareng oleh ProfileSayaController (banner "Lengkapi Dokumen"),
 // LandingController (titik merah di avatar Beranda), dan
 // UnggahBerkasController (detail per-slot) - satu sumber kebenaran supaya
@@ -22,7 +22,7 @@ class DocumentsService {
   static final DocumentsService _instance = DocumentsService._internal();
   factory DocumentsService() => _instance;
 
-  static const requiredTypes = ['ktp', 'bpjs', 'npwp'];
+  static const requiredTypes = ['ktp', 'bpjs'];
 
   String get _baseApiUrl => dotenv.env['BASE_API_URL']!;
 
