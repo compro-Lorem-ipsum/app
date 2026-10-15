@@ -15,6 +15,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/error_mapper.dart';
 import '../../services/api_service.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
@@ -142,24 +143,30 @@ class TambahKontakDaruratController extends GetxController {
   }
 
   void _handleSaveError(int? statusCode, dynamic body) {
-    final error = body is Map ? body['error'] : null;
-    final code = error is Map ? error['code']?.toString() : null;
-    final rawMessage = (error is Map ? error['message'] : null)?.toString();
+    final err = ErrorMapper.parse(body, statusCode: statusCode);
 
-    if (code == 'CONTACT_LIMIT_REACHED') {
-      _showError('Kontak Darurat Penuh', rawMessage ?? 'Anda sudah memiliki 2 kontak darurat aktif. Hapus salah satu terlebih dahulu.');
-      return;
+    switch (err.code) {
+      case 'CONTACT_LIMIT_REACHED':
+        _showError('Kontak Darurat Penuh', err.message);
+        return;
+      case 'VALIDATION_ERROR':
+      case 'VALUE_TOO_LONG':
+        _showError('Data Tidak Valid', err.message);
+        return;
+      case 'NOT_FOUND':
+        _showError('Kontak Tidak Ditemukan', err.message);
+        return;
     }
 
     switch (statusCode) {
       case 422:
-        _showError('Data Tidak Valid', rawMessage ?? 'Periksa kembali data yang Anda isi.');
+        _showError('Data Tidak Valid', err.message);
         return;
       case 404:
-        _showError('Kontak Tidak Ditemukan', rawMessage ?? 'Kontak ini sudah tidak ada, mungkin sudah dihapus.');
+        _showError('Kontak Tidak Ditemukan', err.message);
         return;
       default:
-        _showError('Gagal Menyimpan', rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.');
+        _showError('Gagal Menyimpan', err.message);
     }
   }
 
@@ -181,7 +188,7 @@ class TambahKontakDaruratController extends GetxController {
         return;
       }
 
-      _showError('Gagal Menghapus', 'Terjadi kesalahan, silakan coba lagi.');
+      _showError('Gagal Menghapus', ErrorMapper.messageFor(response.body, statusCode: response.statusCode));
     } catch (e) {
       debugPrint('TambahKontakDaruratController: gagal menghapus kontak darurat: $e');
       _showError('Gagal Menghapus', 'Tidak dapat terhubung ke server. Periksa koneksi Anda dan coba lagi.');

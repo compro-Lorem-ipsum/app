@@ -17,6 +17,7 @@ import 'package:http_parser/http_parser.dart';
 
 import '../../services/attendance_summary_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/error_mapper.dart';
 import '../../services/satpam_profile_service.dart';
 import '../../services/tracking_service.dart';
 import '../../services/workmanager_callback.dart';
@@ -286,7 +287,7 @@ class AbsenCheckinController extends GetxController {
         return;
       }
 
-      _handleAttendanceError(body);
+      _handleAttendanceError(body, statusCode: response.statusCode);
     } catch (e) {
       debugPrint("AbsenCheckinController: gagal terhubung ke server: $e");
       if (kDebugMode) {
@@ -299,6 +300,7 @@ class AbsenCheckinController extends GetxController {
         // HARUS selalu berakhir sebagai error asli ke pengguna.
         await _handleOfflineFallback();
       } else {
+        resultData.value = {'message': ErrorMapper.networkMessage};
         showResultDialog(type: 'SERVER_ERROR');
       }
     } finally {
@@ -348,11 +350,10 @@ class AbsenCheckinController extends GetxController {
   /// Terjemahkan `error.code` dari backend ke dialog yang sudah ada.
   /// Kode-kode ini mengikuti dokumentasi endpoint Attendance — lihat
   /// bagian Error Codes.
-  void _handleAttendanceError(dynamic body) {
-    final error = body is Map ? body['error'] : null;
-    final code = error is Map ? error['code']?.toString() : null;
-    final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
-    resultData.value = {'message': rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.'};
+  void _handleAttendanceError(dynamic body, {int? statusCode}) {
+    final err = ErrorMapper.parse(body, statusCode: statusCode);
+    final code = err.code;
+    resultData.value = {'message': err.message};
 
     switch (code) {
       case 'OUTSIDE_POS_RADIUS':
@@ -368,6 +369,8 @@ class AbsenCheckinController extends GetxController {
       case 'NO_CLIENT_SCOPE':
       case 'ALREADY_CHECKED_IN':
       case 'NOT_CHECKED_IN':
+      case 'NO_ACTIVE_SESSION':
+      case 'CHECK_OUT_WITHOUT_CHECK_IN':
         showResultDialog(type: 'NO_SCHEDULE');
         return;
     }
@@ -524,8 +527,8 @@ class AbsenCheckinController extends GetxController {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red[100]!)),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text("Jarak tidak memasuki radius Pos", style: TextStyle(color: Color(0xFFA80808))),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Flexible(child: Text(resultData.value?['message']?.toString() ?? "Jarak tidak memasuki radius Pos", textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFA80808)))),
               ]),
             ),
             const SizedBox(height: 20),
@@ -572,8 +575,8 @@ class AbsenCheckinController extends GetxController {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red[100]!)),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text("Verifikasi wajah gagal", style: TextStyle(color: Color(0xFFA80808))),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Flexible(child: Text(resultData.value?['message']?.toString() ?? "Verifikasi wajah gagal", textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFA80808)))),
               ]),
             ),
             const SizedBox(height: 20),
@@ -622,7 +625,7 @@ class AbsenCheckinController extends GetxController {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFFEDD5))),
               child: Text(
-                "Saat ini belum ada shift yang dibuka untuk check-in. Check-in dibuka satu jam sebelum shift dimulai.",
+                resultData.value?['message']?.toString() ?? "Saat ini belum ada shift yang dibuka untuk check-in. Check-in dibuka satu jam sebelum shift dimulai.",
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFFD97706)),
               ),
@@ -664,8 +667,8 @@ class AbsenCheckinController extends GetxController {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.red[100]!)),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text("Terjadi kesalahan jaringan.", style: TextStyle(color: Color(0xFFA80808))),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Flexible(child: Text(resultData.value?['message']?.toString() ?? "Terjadi kesalahan jaringan.", textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFA80808)))),
               ]),
             ),
             const SizedBox(height: 20),

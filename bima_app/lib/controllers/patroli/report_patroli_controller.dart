@@ -27,6 +27,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/error_mapper.dart';
 import '../../services/api_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
@@ -134,16 +135,14 @@ class ReportPatroliController extends GetxController {
         return;
       }
 
-      final error = res.body is Map ? res.body['error'] : null;
-      if (error is Map && error['code'] == 'NO_CLIENT_SCOPE') {
-        Get.snackbar(
-          'Belum Ada Penugasan',
-          'Anda belum ditugaskan ke client mana pun, jadi tidak ada pos yang bisa dipilih.',
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      }
+      final err = ErrorMapper.parse(res.body, statusCode: res.statusCode);
+      Get.snackbar(
+        err.code == 'NO_CLIENT_SCOPE' ? 'Belum Ada Penugasan' : 'Gagal Memuat Pos',
+        err.message,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
     } catch (e) {
       debugPrint('ReportPatroliController: gagal ambil daftar pos: $e');
     }
@@ -254,7 +253,7 @@ class ReportPatroliController extends GetxController {
         return;
       }
 
-      _handleSubmitError(reportRes.body);
+      _handleSubmitError(reportRes.body, statusCode: reportRes.statusCode);
       showModal();
     } catch (e) {
       debugPrint('ReportPatroliController: gagal submit laporan: $e');
@@ -266,24 +265,8 @@ class ReportPatroliController extends GetxController {
     }
   }
 
-  void _handleSubmitError(dynamic body) {
-    final error = body is Map ? body['error'] : null;
-    final code = error is Map ? error['code']?.toString() : null;
-    final rawMessage = (error is Map ? error['message'] : null)?.toString();
-
-    switch (code) {
-      case 'NOT_ON_DUTY':
-        alertMessage.value = 'Anda belum check-in. Lakukan check-in terlebih dahulu sebelum melapor patroli.';
-        return;
-      case 'POS_NOT_JAGA':
-        alertMessage.value = 'Pos yang dipilih bukan pos jaga.';
-        return;
-      case 'OUTSIDE_POS_RADIUS':
-        alertMessage.value = 'Anda berada di luar radius pos ini.';
-        return;
-      default:
-        alertMessage.value = rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.';
-    }
+  void _handleSubmitError(dynamic body, {int? statusCode}) {
+    alertMessage.value = ErrorMapper.messageFor(body, statusCode: statusCode);
   }
 
   // ===== MODAL =====

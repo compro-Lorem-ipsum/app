@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/error_mapper.dart';
 import '../../widgets/app_theme.dart';
 import '../../widgets/success_screen.dart';
 import '../../services/api_service.dart';
@@ -240,7 +241,7 @@ class PengajuanController extends GetxController {
         return;
       }
 
-      _handleSubmitError(response.body);
+      _handleSubmitError(response.body, statusCode: response.statusCode);
     } catch (e) {
       debugPrint('PengajuanController: gagal mengirim pengajuan: $e');
       _showValidationError('Gagal Mengirim', 'Tidak dapat terhubung ke server. Periksa koneksi Anda dan coba lagi.');
@@ -249,17 +250,9 @@ class PengajuanController extends GetxController {
     }
   }
 
-  void _handleSubmitError(dynamic body) {
-    final error = body is Map ? body['error'] : null;
-    final code = error is Map ? error['code']?.toString() : null;
-    final rawMessage = (error is Map ? error['message'] : null)?.toString();
-
-    if (code == 'REQUEST_OVERLAP') {
-      _showValidationError('Tanggal Bentrok', rawMessage ?? 'Rentang tanggal ini bentrok dengan pengajuan Anda yang lain.');
-      return;
-    }
-
-    _showValidationError('Gagal Mengirim', rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.');
+  void _handleSubmitError(dynamic body, {int? statusCode}) {
+    final err = ErrorMapper.parse(body, statusCode: statusCode);
+    _showValidationError(err.code == 'REQUEST_OVERLAP' ? 'Tanggal Bentrok' : 'Gagal Mengirim', err.message);
   }
 
   void _showSuccessDialog() {

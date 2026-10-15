@@ -14,6 +14,7 @@ import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/error_mapper.dart';
 import '../../services/api_service.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
@@ -135,16 +136,14 @@ class RekanKerjaController extends GetxController {
       }
 
       debugPrint('RekanKerjaController: gagal ambil rekan kerja (status ${response.statusCode}).');
-      final error = body?['error'];
-      if (error is Map && error['code'] == 'NO_CLIENT_SCOPE') {
-        Get.snackbar(
-          'Belum Ada Penugasan',
-          'Anda belum ditugaskan ke client mana pun, jadi tidak ada rekan kerja yang bisa ditampilkan.',
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.BOTTOM,
-        );
-      }
+      final err = ErrorMapper.parse(body, statusCode: response.statusCode);
+      Get.snackbar(
+        err.code == 'NO_CLIENT_SCOPE' ? 'Belum Ada Penugasan' : 'Gagal Memuat Rekan Kerja',
+        err.message,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
       return (items: <RekanKerjaItem>[], nextCursor: null, hasMore: false);
     } catch (e) {
       debugPrint('RekanKerjaController: gagal ambil rekan kerja: $e');

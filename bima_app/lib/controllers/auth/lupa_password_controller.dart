@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
+import '../../services/error_mapper.dart';
 import '../../widgets/bubble_success_screen.dart';
 
 final String BASE_API_URL = dotenv.env['BASE_API_URL']!;
@@ -72,12 +73,10 @@ class LupaPasswordController extends GetxController {
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       if (ok) return true;
 
-      final body = response.body;
-      final error = body is Map ? body['error'] : null;
-      final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
+      final err = ErrorMapper.parse(response.body, statusCode: response.statusCode);
       _showError(
         response.statusCode == 422 ? 'Email Tidak Valid' : 'Gagal Mengirim OTP',
-        rawMessage ?? 'Periksa kembali alamat email Anda.',
+        err.message,
       );
       return false;
     } catch (e) {
@@ -188,36 +187,37 @@ class LupaPasswordController extends GetxController {
   }
 
   void _showResetPasswordError(int? statusCode, dynamic body) {
-    final error = body is Map ? body['error'] : null;
-    final code = error is Map ? error['code']?.toString() : null;
-    final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
+    final err = ErrorMapper.parse(body, statusCode: statusCode);
 
-    if (code == 'OTP_INVALID') {
-      int? attemptsRemaining;
-      if (error is Map) {
-        final details = error['details'];
-        if (details is Map && details['attempts_remaining'] is int) {
-          attemptsRemaining = details['attempts_remaining'] as int;
+    switch (err.code) {
+      case 'OTP_INVALID':
+        final error = body is Map ? body['error'] : null;
+        int? attemptsRemaining;
+        if (error is Map) {
+          final details = error['details'];
+          if (details is Map && details['attempts_remaining'] is int) {
+            attemptsRemaining = details['attempts_remaining'] as int;
+          }
         }
-      }
-      _showError(
-        'Kode OTP Salah',
-        attemptsRemaining != null
-            ? '${rawMessage ?? 'Kode salah'} ($attemptsRemaining percobaan tersisa).'
-            : rawMessage ?? 'Kode OTP salah.',
-      );
-      return;
+        _showError(
+          'Kode OTP Salah',
+          attemptsRemaining != null ? '${err.message} ($attemptsRemaining percobaan tersisa).' : err.message,
+        );
+        return;
+      case 'OTP_MAX_ATTEMPTS':
+        _showError('Kode OTP Diblokir', err.message);
+        return;
     }
 
     switch (statusCode) {
       case 401:
-        _showError('Kode OTP Tidak Valid', rawMessage ?? 'Kode OTP salah, sudah kedaluwarsa, atau email tidak sesuai.');
+        _showError('Kode OTP Tidak Valid', err.message);
         return;
       case 422:
-        _showError('Data Tidak Valid', rawMessage ?? 'Periksa kembali kode OTP dan password baru Anda.');
+        _showError('Data Tidak Valid', err.message);
         return;
       default:
-        _showError('Gagal Mengatur Ulang Sandi', rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.');
+        _showError('Gagal Mengatur Ulang Sandi', err.message);
     }
   }
 }

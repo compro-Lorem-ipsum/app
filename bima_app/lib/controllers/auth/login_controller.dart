@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/error_mapper.dart';
 import '../../services/fcm_service.dart';
 import '../../services/panic_alert_polling_service.dart';
 
@@ -55,28 +56,41 @@ class LoginController extends GetxController {
   /// pesan mentahnya kurang jelas buat pengguna; `statusCode` sebagai
   /// fallback kalau code tidak dikenali.
   void _showLoginError(int? statusCode, dynamic body) {
-    final error = body is Map ? body['error'] : null;
-    final code = error is Map ? error['code']?.toString() : null;
-    final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
+    final err = ErrorMapper.parse(body, statusCode: statusCode);
 
-    switch (code) {
+    switch (err.code) {
       case 'ACCOUNT_PENDING':
-        _showError('Akun Menunggu Persetujuan', 'Akun Anda masih menunggu persetujuan admin sebelum dapat digunakan.');
+        _showError('Akun Menunggu Persetujuan', err.message);
+        return;
+      case 'ACCOUNT_REJECTED':
+        _showError('Pendaftaran Ditolak', err.message);
+        return;
+      case 'ACCOUNT_INACTIVE':
+        _showError('Akun Tidak Aktif', err.message);
+        return;
+      case 'INVALID_CREDENTIALS':
+        _showError('NIP/Email atau Password Salah', err.message);
+        return;
+      case 'VALIDATION_ERROR':
+        _showError('Data Tidak Valid', err.message);
+        return;
+      case 'FORBIDDEN':
+        _showError('Akses Ditolak', err.message);
         return;
     }
 
     switch (statusCode) {
       case 401:
-        _showError('NIP/Email atau Password Salah', rawMessage ?? 'Periksa kembali NIP/email dan password Anda.');
+        _showError('NIP/Email atau Password Salah', err.message);
         return;
       case 422:
-        _showError('Data Tidak Valid', rawMessage ?? 'Periksa kembali NIP/email dan password yang Anda masukkan.');
+        _showError('Data Tidak Valid', err.message);
         return;
       case 403:
-        _showError('Akses Ditolak', rawMessage ?? 'Anda tidak memiliki akses untuk masuk.');
+        _showError('Akses Ditolak', err.message);
         return;
       default:
-        _showError('Masuk Gagal', rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.');
+        _showError('Masuk Gagal', err.message);
     }
   }
 

@@ -12,6 +12,7 @@ import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/error_mapper.dart';
 import '../../services/satpam_profile_service.dart';
 import '../../services/api_service.dart';
 import '../../widgets/confirm_dialog.dart';
@@ -137,7 +138,7 @@ class PanicAlertController extends GetxController {
         return true;
       }
 
-      _showSendError(response.body);
+      _showSendError(response.body, statusCode: response.statusCode);
       return false;
     } catch (e) {
       debugPrint('PanicAlertController: gagal mengirim panic alert: $e');
@@ -148,14 +149,10 @@ class PanicAlertController extends GetxController {
     }
   }
 
-  void _showSendError(dynamic body, {String? fallback}) {
-    final error = body is Map ? body['error'] : null;
-    final code = error is Map ? error['code']?.toString() : null;
-    final rawMessage = (error is Map ? error['message'] : null)?.toString();
-
-    final message = code == 'NOT_ON_DUTY'
-        ? 'Anda harus check-in terlebih dahulu untuk mengirim panic alert.'
-        : (rawMessage ?? fallback ?? 'Gagal mengirim panic alert, silakan coba lagi.');
+  void _showSendError(dynamic body, {String? fallback, int? statusCode}) {
+    final message = body == null
+        ? (fallback ?? ErrorMapper.networkMessage)
+        : ErrorMapper.messageFor(body, statusCode: statusCode, fallback: fallback);
 
     Get.snackbar(
       'Gagal Mengirim',

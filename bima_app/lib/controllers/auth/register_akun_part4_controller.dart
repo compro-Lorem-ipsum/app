@@ -25,6 +25,7 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import '../../services/error_mapper.dart';
 import '../../services/fcm_service.dart';
 import 'register_akun_upload_foto_controller.dart';
 
@@ -101,7 +102,7 @@ class RegisterAkunPart4Controller extends GetxController {
   /// "wajah tidak terdeteksi" — supaya variasi respons dari backend tetap
   /// diarahkan ke halaman Upload PAS Foto, bukan ke snackbar generik.
   static bool _isNoFaceError(String? code, dynamic body) {
-    if (code == 'FACE_BAD_REQUEST') return true;
+    if (code == 'FACE_BAD_REQUEST' || code == 'FACE_NO_FACE') return true;
     final text = body?.toString().toLowerCase() ?? '';
     if (text.isEmpty) return false;
     if (text.contains('face_bad_request') || text.contains('no face') || text.contains('no_face')) return true;
@@ -114,18 +115,28 @@ class RegisterAkunPart4Controller extends GetxController {
   /// pesan mentahnya kurang jelas buat pengguna. Backend membungkusnya
   /// sebagai `{"error": {"code": ..., "message": ...}}`.
   void _showRegisterError(int? statusCode, dynamic body) {
-    final error = body is Map ? body['error'] : null;
-    final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
+    final err = ErrorMapper.parse(body, statusCode: statusCode);
+
+    switch (err.code) {
+      case 'EMAIL_TAKEN':
+      case 'NIP_TAKEN':
+      case 'CONFLICT':
+        _showError('Sudah Terdaftar', err.message);
+        return;
+      case 'VALIDATION_ERROR':
+        _showError('Data Tidak Valid', err.message);
+        return;
+    }
 
     switch (statusCode) {
       case 409:
-        _showError('Sudah Terdaftar', rawMessage ?? 'Email atau NIP ini sudah terdaftar. Gunakan yang lain.');
+        _showError('Sudah Terdaftar', err.message);
         return;
       case 422:
-        _showError('Data Tidak Valid', rawMessage ?? 'Periksa kembali data yang Anda isi pada form pendaftaran.');
+        _showError('Data Tidak Valid', err.message);
         return;
       default:
-        _showError('Pendaftaran Gagal', rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.');
+        _showError('Pendaftaran Gagal', err.message);
     }
   }
 
@@ -237,12 +248,19 @@ class RegisterAkunPart4Controller extends GetxController {
         return;
       }
 
-      final error = body is Map ? body['error'] : null;
-      final code = error is Map ? error['code']?.toString() : null;
+      final code = ErrorMapper.extractCode(body);
       if (_isNoFaceError(code, body)) {
         _returnToUploadFotoWithError(
-          'Wajah tidak terdeteksi. Pastikan pencahayaan cukup terang dan wajah terlihat jelas tanpa masker atau kacamata gelap.',
+          ErrorMapper.messageForCode(code == 'FACE_BAD_REQUEST' ? 'FACE_NO_FACE' : code) ??
+              'Wajah tidak terdeteksi. Pastikan pencahayaan cukup terang dan wajah terlihat jelas tanpa masker atau kacamata gelap.',
         );
+        return;
+      }
+
+      // Error foto lain (banyak wajah, foto terlalu besar, tidak terbaca,
+      // avatar belum tervalidasi, dst.) juga relevan di halaman upload foto.
+      if (code != null && (code.startsWith('FACE_') || code == 'AVATAR_NOT_VALIDATED' || code == 'OBJECT_INVALID')) {
+        _returnToUploadFotoWithError(ErrorMapper.messageFor(body, statusCode: response.statusCode));
         return;
       }
 

@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/error_mapper.dart';
 import '../../services/documents_service.dart';
 import '../../widgets/success_screen.dart';
 import '../../services/api_service.dart';
@@ -155,7 +156,7 @@ class UnggahBerkasController extends GetxController {
       final linkOk = linkRes.statusCode != null && linkRes.statusCode! >= 200 && linkRes.statusCode! < 300;
       final linkData = linkOk && linkRes.body is Map ? linkRes.body['data'] as Map<String, dynamic>? : null;
       if (linkData == null) {
-        _showError('Gagal Mengunggah', 'Tidak dapat memulai proses unggah dokumen, coba lagi.');
+        _showError('Gagal Mengunggah', ErrorMapper.messageFor(linkRes.body, statusCode: linkRes.statusCode));
         return;
       }
 
@@ -185,7 +186,7 @@ class UnggahBerkasController extends GetxController {
       );
       final saveOk = saveResponse.statusCode != null && saveResponse.statusCode! >= 200 && saveResponse.statusCode! < 300;
       if (!saveOk) {
-        _showDocumentError(saveResponse.body);
+        _showDocumentError(saveResponse.body, statusCode: saveResponse.statusCode);
         return;
       }
 
@@ -214,23 +215,21 @@ class UnggahBerkasController extends GetxController {
   /// endpoint Documents: OBJECT_INVALID (422, magic-byte gagal cocok
   /// dengan ekstensi), OBJECT_IN_USE (409, object_uuid sudah dipakai
   /// record lain), NOT_FOUND (404, object_uuid tidak ada/sudah kedaluwarsa).
-  void _showDocumentError(dynamic body) {
-    final error = body is Map ? body['error'] : null;
-    final code = error is Map ? error['code']?.toString() : null;
-    final rawMessage = (error is Map ? error['message'] : (body is Map ? body['message'] : null))?.toString();
+  void _showDocumentError(dynamic body, {int? statusCode}) {
+    final err = ErrorMapper.parse(body, statusCode: statusCode);
 
-    switch (code) {
+    switch (err.code) {
       case 'OBJECT_INVALID':
-        _showError('Format File Tidak Didukung', rawMessage ?? 'File yang diunggah tidak valid. Gunakan file JPG atau PDF asli.');
+        _showError('Format File Tidak Didukung', err.message);
         return;
       case 'OBJECT_IN_USE':
-        _showError('File Sudah Terpakai', rawMessage ?? 'File ini sudah terpasang di dokumen lain. Unggah ulang dari awal.');
+        _showError('File Sudah Terpakai', err.message);
         return;
       case 'NOT_FOUND':
-        _showError('Sesi Unggah Kedaluwarsa', rawMessage ?? 'Link unggah sudah tidak berlaku. Coba unggah ulang.');
+        _showError('Sesi Unggah Kedaluwarsa', 'Link unggah sudah tidak berlaku. Coba unggah ulang.');
         return;
       default:
-        _showError('Gagal Mengunggah', rawMessage ?? 'Terjadi kesalahan, silakan coba lagi.');
+        _showError('Gagal Mengunggah', err.message);
     }
   }
 
@@ -260,7 +259,7 @@ class UnggahBerkasController extends GetxController {
       final response = await ApiService.to.delete('/documents/$uuid');
       final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
       if (!ok) {
-        _showError('Gagal Menghapus', 'Tidak dapat menghapus dokumen, coba lagi.');
+        _showError('Gagal Menghapus', ErrorMapper.messageFor(response.body, statusCode: response.statusCode));
         return;
       }
       _clearSlotLocally(slot);

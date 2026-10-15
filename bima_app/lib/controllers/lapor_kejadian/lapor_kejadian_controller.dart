@@ -16,6 +16,7 @@ import 'package:http_parser/http_parser.dart';
 import '../../widgets/app_theme.dart';
 import '../../widgets/primary_button.dart';
 import '../../services/api_service.dart';
+import '../../services/error_mapper.dart';
 
 final String _baseApiUrl = dotenv.env['BASE_API_URL']!;
 
@@ -149,7 +150,7 @@ class LaporKejadianController extends GetxController {
         return;
       }
 
-      _showSubmitError(response.body);
+      _showSubmitError(response.body, statusCode: response.statusCode);
     } catch (e) {
       debugPrint('LaporKejadianController: gagal mengirim laporan: $e');
       _showSubmitError(null, fallback: 'Tidak dapat terhubung ke server. Periksa koneksi Anda dan coba lagi.');
@@ -158,12 +159,13 @@ class LaporKejadianController extends GetxController {
     }
   }
 
-  void _showSubmitError(dynamic body, {String? fallback}) {
-    final error = body is Map ? body['error'] : null;
-    final rawMessage = (error is Map ? error['message'] : null)?.toString();
+  void _showSubmitError(dynamic body, {String? fallback, int? statusCode}) {
+    final message = body == null
+        ? (fallback ?? ErrorMapper.networkMessage)
+        : ErrorMapper.messageFor(body, statusCode: statusCode, fallback: fallback);
     Get.snackbar(
       'Gagal Mengirim',
-      rawMessage ?? fallback ?? 'Terjadi kesalahan, silakan coba lagi.',
+      message,
       backgroundColor: Colors.red,
       colorText: Colors.white,
       snackPosition: SnackPosition.BOTTOM,
