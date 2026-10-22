@@ -131,16 +131,50 @@ class AbsenCheckinView extends StatelessWidget {
           const SizedBox(height: 6),
           Obx(() {
             if (controller.isLoadingLocation.value) {
-              return const Text('Mencari lokasi...', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText));
+              final n = controller.locationAttempt.value;
+              return Text(
+                n > 0 ? 'Mencari lokasi akurat ($n/5)...' : 'Mencari lokasi...',
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText),
+              );
             }
             final lat = controller.latitude.value.toStringAsFixed(6);
             final lng = controller.longitude.value.toStringAsFixed(6);
+            final accuracy = controller.accuracyMeter.value;
+            final accuracyText = accuracy > 0 ? ' (±${accuracy.toStringAsFixed(0)} m)' : '';
             final suffix = controller.isInRadius.value
                 ? '${controller.distanceMeter.value.toStringAsFixed(0)} meter dari Pos'
                 : 'Diluar Radius Pos';
-            return Text(
-              '$lat, $lng · $suffix',
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText),
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$lat, $lng · $suffix$accuracyText',
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText),
+                ),
+                if (controller.locationWarning.value.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    controller.locationWarning.value,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: radiusRedText),
+                  ),
+                ],
+                if (!controller.isInRadius.value) ...[
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: controller.refreshLocation,
+                    child: const Text(
+                      'Cek ulang lokasi',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        color: primaryColor,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             );
           }),
         ],

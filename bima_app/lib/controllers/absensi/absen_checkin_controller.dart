@@ -36,6 +36,13 @@ class AbsenCheckinController extends GetxController {
   var isInRadius = false.obs;
   var isLoadingLocation = true.obs;
 
+  /// Nomor percobaan polling lokasi yang sedang berjalan (1..[_maxLocationAttempts]),
+  /// dipakai view untuk menampilkan progres "Mencari lokasi (n/5)".
+  var locationAttempt = 0.obs;
+
+  /// Peringatan kualitas GPS setelah polling selesai (kosong = tidak ada).
+  var locationWarning = ''.obs;
+
   final profile = Rxn<Map<String, dynamic>>();
   String get displayNama => (profile.value?['nama'] as String?) ?? '-';
   String get displayNip => (profile.value?['nip'] as String?) ?? '-';
@@ -58,6 +65,22 @@ class AbsenCheckinController extends GetxController {
   /// nilai yang menentukan boleh/tidaknya submit.
   static const double _assumedRadiusMeter = 100;
 
+  // ===== POLLING LOKASI =====
+  // Satu pembacaan GPS sering tidak akurat (cache/Wi-Fi/BTS, belum lock
+  // satelit) sehingga satpam yang sebenarnya di pos terbaca di luar radius.
+  // Karena itu lokasi dibaca sampai [_maxLocationAttempts] kali dan polling
+  // berhenti lebih awal begitu ada bacaan yang DALAM radius DAN akurasinya
+  // cukup bagus ([_requiredAccuracyMeter]) - dalam radius saja tidak cukup,
+  // karena bacaan akurasi buruk bisa kebetulan jatuh di dalam radius.
+  // Kalau tidak ada yang memenuhi, dipakai bacaan dengan akurasi TERBAIK.
+  static const int _maxLocationAttempts = 5;
+  static const double _requiredAccuracyMeter = 35;
+  static const Duration _locationAttemptTimeout = Duration(seconds: 8);
+  static const Duration _locationAttemptGap = Duration(seconds: 2);
+
+  Future<void>? _posLoadFuture;
+  bool _isLocating = false;
+
   // ===== KAMERA (live preview langsung di halaman ini) =====
   CameraController? cameraController;
   var isCameraInitialized = false.obs;
@@ -72,7 +95,7 @@ class AbsenCheckinController extends GetxController {
     super.onInit();
     final args = Get.arguments;
     isCheckIn = (args is Map && args['isCheckIn'] is bool) ? args['isCheckIn'] as bool : true;
-    _loadPosUtama();
+    _posLoadFuture = _loadPosUtama();
     _getCurrentLocation();
     _initializeCamera();
     _loadProfile();
@@ -161,32 +184,116 @@ class AbsenCheckinController extends GetxController {
 
   // ===== LOKASI =====
   Future<void> _getCurrentLocation() async {
+    if (_isLocating) return;
+    _isLocating = true;
     isLoadingLocation.value = true;
+    locationAttempt.value = 0;
+    locationWarning.value = '';
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        locationWarning.value = 'GPS perangkat tidak aktif. Aktifkan GPS lalu coba lagi.';
+        return;
+      }
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
+        if (permission == LocationPermission.denied) {
+          locationWarning.value = 'Izin lokasi ditolak.';
+          return;
+        }
       }
 
-      if (permission == LocationPermission.deniedForever) return;
+      if (permission == LocationPermission.deniedForever) {
+        locationWarning.value = 'Izin lokasi ditolak permanen. Aktifkan lewat Pengaturan.';
+        return;
+      }
 
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      Position? best;
+      for (var attempt = 1; attempt <= _maxLocationAttempts; attempt++) {
+        locationAttempt.value = attempt;
 
-      latitude.value = position.latitude;
-      longitude.value = position.longitude;
-      accuracyMeter.value = position.accuracy;
-      _recomputeDistance();
+        Position? reading;
+        try {
+          reading = await Geolocator.getCurrentPosition(
+            locationSettings: LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: _locationAttemptTimeout,
+            ),
+          );
+        } on TimeoutException {
+          debugPrint('AbsenCheckinController: polling lokasi #$attempt timeout.');
+        } catch (e) {
+          debugPrint('AbsenCheckinController: polling lokasi #$attempt gagal: $e');
+        }
+
+        if (reading != null) {
+          if (best == null || reading.accuracy < best.accuracy) best = reading;
+          _applyPosition(best);
+
+          // Pos shift bisa belum selesai dimuat saat bacaan pertama datang.
+          await _awaitPosLoaded();
+          final distance = _distanceToPos(reading);
+          final accurateEnough = reading.accuracy <= _requiredAccuracyMeter;
+          if (distance == null && accurateEnough) {
+            // Tanpa pos shift tidak ada radius untuk dicek; akurasi bagus sudah cukup.
+            best = reading;
+            _applyPosition(best);
+            return;
+          }
+          if (distance != null && distance <= _assumedRadiusMeter && accurateEnough) {
+            best = reading;
+            _applyPosition(best);
+            debugPrint('AbsenCheckinController: dalam radius pada polling #$attempt '
+                '(jarak ${distance.toStringAsFixed(0)} m, akurasi ${reading.accuracy.toStringAsFixed(0)} m).');
+            return;
+          }
+        }
+
+        if (attempt < _maxLocationAttempts) await Future.delayed(_locationAttemptGap);
+      }
+
+      if (best == null) {
+        locationWarning.value = 'Lokasi tidak berhasil didapat. Pindah ke area terbuka lalu coba lagi.';
+        return;
+      }
+
+      _applyPosition(best);
+      if (best.accuracy > _requiredAccuracyMeter) {
+        locationWarning.value = 'Sinyal GPS lemah (akurasi ±${best.accuracy.toStringAsFixed(0)} m). '
+            'Pindah ke area terbuka lalu cek ulang lokasi.';
+      }
     } catch (e) {
       debugPrint("Gagal mengambil lokasi: $e");
     } finally {
       isLoadingLocation.value = false;
+      _isLocating = false;
     }
+  }
+
+  Future<void> _awaitPosLoaded() async {
+    final loading = _posLoadFuture;
+    if (loading == null) return;
+    try {
+      await loading.timeout(const Duration(seconds: 10));
+    } catch (_) {}
+  }
+
+  /// Jarak [position] ke pos shift saat ini; null kalau pos belum diketahui.
+  double? _distanceToPos(Position position) {
+    final pos = posUtama.value;
+    final posLat = (pos?['lat'] as num?)?.toDouble();
+    final posLng = (pos?['lng'] as num?)?.toDouble();
+    if (posLat == null || posLng == null) return null;
+    return Geolocator.distanceBetween(position.latitude, position.longitude, posLat, posLng);
+  }
+
+  void _applyPosition(Position position) {
+    latitude.value = position.latitude;
+    longitude.value = position.longitude;
+    accuracyMeter.value = position.accuracy;
+    _recomputeDistance();
   }
 
   void refreshLocation() => _getCurrentLocation();
