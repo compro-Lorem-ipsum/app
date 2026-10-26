@@ -74,8 +74,51 @@ class LandingController extends GetxController {
     ]);
   }
 
+  /// True kalau batas toleransi check-out (lihat [_checkoutGrace]) untuk
+  /// shift terakhir sudah lewat. Dipakai juga oleh display getter di bawah
+  /// supaya jam check-in shift yang sudah "dianggap lewat" itu tidak ikut
+  /// ditampilkan di kartu Status Hari ini — kalau tombolnya sudah balik ke
+  /// "Check-in" (shift baru), menampilkan jam check-in shift LAMA di
+  /// sampingnya cuma membingungkan pengguna (terlihat seperti kontradiksi).
+  final _checkoutGraceExpired = false.obs;
+
   Future<void> refreshStatus() async {
-    isOnDuty.value = await TrackingService().isOnDuty();
+    final tracked = await TrackingService().isOnDuty();
+    _checkoutGraceExpired.value = await _isPastCheckoutGrace();
+    isOnDuty.value = tracked && !_checkoutGraceExpired.value;
+  }
+
+  /// Toleransi check-out: 60 menit setelah shift berakhir. Dipakai supaya
+  /// tombol Check-out shift SEBELUMNYA tidak nyangkut selamanya kalau lupa
+  /// checkout — lewat batas ini, Beranda balik tampil "Check-in" (untuk
+  /// shift selanjutnya) walau flag lokal TrackingService.isOnDuty masih
+  /// true. Dalam batas ini, "Check-out" tetap tampil selama belum checkout.
+  static const _checkoutGrace = Duration(minutes: 60);
+
+  Future<bool> _isPastCheckoutGrace() async {
+    final shifts = await AttendanceSummaryService().fetchShiftsToday();
+    final shift = _latestStartedShift(shifts);
+    final ends = shift == null ? null : DateTime.tryParse((shift['ends_at'] ?? '').toString())?.toUtc();
+    if (ends == null) return false;
+    return DateTime.now().toUtc().isAfter(ends.add(_checkoutGrace));
+  }
+
+  /// Shift hari ini yang `starts_at`-nya paling akhir tapi sudah lewat
+  /// (<= sekarang) — dianggap shift yang sedang/baru saja dijalani, dipakai
+  /// hanya untuk ambil `ends_at` di atas.
+  Map<String, dynamic>? _latestStartedShift(List<Map<String, dynamic>> shifts) {
+    final now = DateTime.now().toUtc();
+    Map<String, dynamic>? latest;
+    DateTime? latestStart;
+    for (final shift in shifts) {
+      final starts = DateTime.tryParse((shift['starts_at'] ?? '').toString())?.toUtc();
+      if (starts == null || starts.isAfter(now)) continue;
+      if (latestStart == null || starts.isAfter(latestStart)) {
+        latest = shift;
+        latestStart = starts;
+      }
+    }
+    return latest;
   }
 
   Future<void> loadProfile() async {
@@ -99,13 +142,26 @@ class LandingController extends GetxController {
 
   String get displayClient => (profile.value?['client'] as String?) ?? '-';
 
-  String get displayJamMasukShift => AttendanceSummaryService.formatJamCheckIn(todayAttendance.value);
+  /// Record hari ini untuk ditampilkan — null-kan kalau shift-nya belum
+  /// checkout TAPI batas toleransi check-out sudah lewat (lihat
+  /// [_checkoutGraceExpired]), supaya jam check-in shift yang sudah
+  /// dianggap lewat tidak nyangkut di kartu sementara tombolnya sendiri
+  /// sudah balik ke "Check-in".
+  Map<String, dynamic>? get _displayAttendance {
+    final record = todayAttendance.value;
+    if (record != null && record['checked_out_at'] == null && _checkoutGraceExpired.value) {
+      return null;
+    }
+    return record;
+  }
+
+  String get displayJamMasukShift => AttendanceSummaryService.formatJamCheckIn(_displayAttendance);
   num? _minutes(String bucket) => (workingHours.value?[bucket] as Map?)?['minutes'] as num?;
   String get displayDurasiHariIni => AttendanceSummaryService.formatJamMenit(_minutes('today'));
   String get displayDurasiBulanIni => AttendanceSummaryService.formatJamMenit(_minutes('this_month'));
   String get displayDurasiTotal => AttendanceSummaryService.formatJamMenit(_minutes('all_time'));
 
-  String get displayCheckIn => AttendanceSummaryService.formatJamCheckIn(todayAttendance.value);
-  String get displayCheckOut => AttendanceSummaryService.formatJamCheckOut(todayAttendance.value);
-  String get displayDurasiStatus => AttendanceSummaryService.formatJamMenit(todayAttendance.value?['worked_minutes'] as num?);
+  String get displayCheckIn => AttendanceSummaryService.formatJamCheckIn(_displayAttendance);
+  String get displayCheckOut => AttendanceSummaryService.formatJamCheckOut(_displayAttendance);
+  String get displayDurasiStatus => AttendanceSummaryService.formatJamMenit(_displayAttendance?['worked_minutes'] as num?);
 }

@@ -58,15 +58,34 @@ class AttendanceSummaryService {
     }
   }
 
-  /// Record absensi hari ini (dari `records`), atau null kalau belum ada
-  /// (belum check-in).
+  /// Record absensi TERBARU hari ini (dari `records`), atau null kalau
+  /// belum ada (belum check-in). Urutan `records` dari backend tidak
+  /// didokumentasikan terjamin terbaru-dulu — kalau satpam sudah check-in
+  /// lebih dari sekali hari ini (mis. shift kedua), ambil begitu saja
+  /// `records.first` bisa jadi malah shift PERTAMA yang sudah basi, membuat
+  /// kartu 'Status Hari ini'/'Jam Masuk Shift' di Beranda nyangkut di data
+  /// check-in lama setelah check-in baru. Pilih eksplisit berdasarkan
+  /// `checked_in_at` paling baru.
   Future<Map<String, dynamic>?> fetchToday() async {
     final data = await _fetchTodayRaw();
     final records = data?['records'];
-    if (records is List && records.isNotEmpty && records.first is Map) {
-      return Map<String, dynamic>.from(records.first as Map);
+    if (records is! List || records.isEmpty) return null;
+
+    Map<String, dynamic>? latest;
+    DateTime? latestCheckIn;
+    for (final raw in records.whereType<Map>()) {
+      final record = Map<String, dynamic>.from(raw);
+      final checkedIn = DateTime.tryParse((record['checked_in_at'] ?? '').toString());
+      if (checkedIn == null) continue;
+      if (latestCheckIn == null || checkedIn.isAfter(latestCheckIn)) {
+        latest = record;
+        latestCheckIn = checkedIn;
+      }
     }
-    return null;
+
+    if (latest != null) return latest;
+    final first = records.first;
+    return first is Map ? Map<String, dynamic>.from(first) : null;
   }
 
   /// Jadwal shift hari ini (dari `shifts`) - dipakai AbsenCheckinController
