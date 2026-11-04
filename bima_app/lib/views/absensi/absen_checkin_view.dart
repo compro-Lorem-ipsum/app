@@ -158,6 +158,20 @@ class AbsenCheckinView extends StatelessWidget {
                     style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: radiusRedText),
                   ),
                 ],
+                if (controller.settingsError.value.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    controller.settingsError.value,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: radiusRedText),
+                  ),
+                ],
+                if (controller.radiusMeter.value != null && !controller.isInRadius.value) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Jarak ${controller.distanceMeter.value.toStringAsFixed(0)} m, batas ${controller.radiusMeter.value!.toStringAsFixed(0)} m dari Pos',
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: radiusRedText),
+                  ),
+                ],
                 if (!controller.isInRadius.value) ...[
                   const SizedBox(height: 4),
                   GestureDetector(
