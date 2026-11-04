@@ -56,14 +56,13 @@ class AbsenCheckinController extends GetxController {
   final posUtama = Rxn<Map<String, dynamic>>();
   String get posNama => (posUtama.value?['nama'] as String?) ?? 'Pos Utama';
 
-  /// Radius toleransi untuk HINT di layar ini saja. Batas sesungguhnya
-  /// (clients.radius_utama + buffer 15m) ditegakkan di server dan
-  /// dikembalikan lewat error.code OUTSIDE_POS_RADIUS saat submit —
-  /// nilai radius_utama milik client itu sendiri belum diekspos lewat
-  /// endpoint mana pun yang bisa diakses satpam, jadi angka di sini
-  /// murni perkiraan supaya hint jarak tidak jauh menyesatkan, bukan
-  /// nilai yang menentukan boleh/tidaknya submit.
-  static const double _assumedRadiusMeter = 100;
+  /// Radius check-in efektif (meter) = clients.radius_utama + buffer 15 m,
+  /// sama dengan yang ditegakkan server. Diambil dari GET /client/settings
+  /// (client di-resolve dari token). Null = belum/gagal dimuat, sehingga
+  /// radius belum bisa dicek (isInRadius tetap false).
+  static const double _radiusBufferMeter = 15;
+  final radiusMeter = Rxn<double>();
+  final settingsError = ''.obs;
 
   // ===== POLLING LOKASI =====
   // Satu pembacaan GPS sering tidak akurat (cache/Wi-Fi/BTS, belum lock
@@ -95,7 +94,7 @@ class AbsenCheckinController extends GetxController {
     super.onInit();
     final args = Get.arguments;
     isCheckIn = (args is Map && args['isCheckIn'] is bool) ? args['isCheckIn'] as bool : true;
-    _posLoadFuture = _loadPosUtama();
+    _posLoadFuture = Future.wait([_loadPosUtama(), _loadClientSettings()]);
     _getCurrentLocation();
     _initializeCamera();
     _loadProfile();
@@ -103,6 +102,34 @@ class AbsenCheckinController extends GetxController {
 
   Future<void> _loadProfile() async {
     profile.value = await SatpamProfileService().getProfile();
+  }
+
+  /// GET /client/settings -> { data: { radius_utama, radius_jaga } }.
+  /// 403 NO_CLIENT_SCOPE = satpam tanpa penempatan aktif.
+  Future<void> _loadClientSettings() async {
+    settingsError.value = '';
+    try {
+      final response = await ApiService.to.get('/client/settings');
+      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+      if (!ok) {
+        final err = ErrorMapper.parse(response.body, statusCode: response.statusCode);
+        settingsError.value = err.code == 'NO_CLIENT_SCOPE'
+            ? 'Anda belum memiliki penempatan aktif.'
+            : 'Gagal memuat radius pos. Coba cek ulang lokasi.';
+        return;
+      }
+      final data = response.body is Map ? response.body['data'] : null;
+      final radius = data is Map ? (data['radius_utama'] as num?)?.toDouble() : null;
+      if (radius == null) {
+        settingsError.value = 'Gagal memuat radius pos. Coba cek ulang lokasi.';
+        return;
+      }
+      radiusMeter.value = radius + _radiusBufferMeter;
+      _recomputeDistance();
+    } catch (e) {
+      debugPrint('AbsenCheckinController: gagal ambil client settings: $e');
+      settingsError.value = 'Gagal memuat radius pos. Coba cek ulang lokasi.';
+    }
   }
 
   /// Cari pos yang berlaku untuk shift SEKARANG dari GET /attendance/today
@@ -173,7 +200,8 @@ class AbsenCheckinController extends GetxController {
 
     final distance = Geolocator.distanceBetween(latitude.value, longitude.value, posLat, posLng);
     distanceMeter.value = distance;
-    isInRadius.value = distance <= _assumedRadiusMeter;
+    final radius = radiusMeter.value;
+    isInRadius.value = radius != null && distance <= radius;
   }
 
   @override
@@ -242,7 +270,7 @@ class AbsenCheckinController extends GetxController {
             _applyPosition(best);
             return;
           }
-          if (distance != null && distance <= _assumedRadiusMeter && accurateEnough) {
+          if (distance != null && radiusMeter.value != null && distance <= radiusMeter.value! && accurateEnough) {
             best = reading;
             _applyPosition(best);
             debugPrint('AbsenCheckinController: dalam radius pada polling #$attempt '
@@ -296,7 +324,15 @@ class AbsenCheckinController extends GetxController {
     _recomputeDistance();
   }
 
-  void refreshLocation() => _getCurrentLocation();
+  void refreshLocation() {
+    if (radiusMeter.value == null) {
+      _posLoadFuture = Future.wait([
+        if (posUtama.value == null) _loadPosUtama(),
+        _loadClientSettings(),
+      ]);
+    }
+    _getCurrentLocation();
+  }
 
   // ===== KAMERA =====
   Future<void> _initializeCamera() async {
