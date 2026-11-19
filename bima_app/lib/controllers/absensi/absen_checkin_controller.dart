@@ -498,6 +498,13 @@ class AbsenCheckinController extends GetxController {
     final code = err.code;
     resultData.value = {'message': err.message};
 
+    // Server bilang tidak ada sesi terbuka: status "bertugas" lokal basi.
+    // Bersihkan supaya Beranda kembali ke "Check-in".
+    if (!isCheckIn &&
+        (code == 'NOT_CHECKED_IN' || code == 'NO_ACTIVE_SESSION' || code == 'CHECK_OUT_WITHOUT_CHECK_IN')) {
+      TrackingService().stopTracking().then((_) => cancelBackgroundTracking());
+    }
+
     switch (code) {
       case 'OUTSIDE_POS_RADIUS':
         showResultDialog(type: 'LOCATION_INVALID');

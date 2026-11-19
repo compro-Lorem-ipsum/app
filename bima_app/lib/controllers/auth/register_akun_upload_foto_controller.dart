@@ -1,6 +1,7 @@
 // Controller untuk langkah 3 pendaftaran akun: upload PAS foto.
-// Foto dipilih langsung dari file (JPG/PNG) memakai file_picker,
-// bukan dari kamera.
+// Foto bisa diambil langsung dari kamera (image_picker) atau dipilih dari
+// file JPG/PNG/WebP (file_picker) — kamera disediakan karena sebagian HP
+// tidak bisa memilih/mengunggah file.
 //
 // Foto ini baru benar-benar diunggah & dicek deteksi wajahnya oleh
 // backend saat submit akhir di step 4 (lihat RegisterAkunPart4Controller).
@@ -12,6 +13,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 
 class RegisterAkunUploadFotoController extends GetxController {
   final currentStep = 3;
@@ -31,7 +33,36 @@ class RegisterAkunUploadFotoController extends GetxController {
     }
   }
 
+  /// Tombol unggah menampilkan pilihan: ambil dari kamera atau upload file.
   Future<void> handleUploadTap() async {
+    Get.bottomSheet(
+      SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Ambil dari kamera'),
+              onTap: () {
+                Get.back();
+                _pickFromCamera();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.upload_file_outlined),
+              title: const Text('Upload dari file'),
+              onTap: () {
+                Get.back();
+                _pickFromFile();
+              },
+            ),
+          ],
+        ),
+      ),
+      backgroundColor: Colors.white,
+    );
+  }
+
+  Future<void> _pickFromFile() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       // Sesuai kontrak backend: jpg/png/webp diterima (201), format lain
@@ -45,6 +76,23 @@ class RegisterAkunUploadFotoController extends GetxController {
       photoPath.value = path;
       hasPhoto.value = true;
       uploadError.value = '';
+    }
+  }
+
+  Future<void> _pickFromCamera() async {
+    try {
+      final photo = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 90,
+        maxWidth: 1600,
+      );
+      if (photo == null) return;
+      photoPath.value = photo.path;
+      hasPhoto.value = true;
+      uploadError.value = '';
+    } catch (e) {
+      uploadError.value = 'Kamera tidak dapat dibuka. Periksa izin kamera lalu coba lagi.';
     }
   }
 

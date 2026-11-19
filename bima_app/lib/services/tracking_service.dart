@@ -64,6 +64,7 @@ class TrackingService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeyOnDuty, true);
     await prefs.setString(_prefKeyAbsensiUuid, absensiUuid);
+    await prefs.setString(TrackingPrefKeys.dutyStartedAt, DateTime.now().toUtc().toIso8601String());
 
     await _ensurePermissions();
     _initForegroundTask();
@@ -245,6 +246,7 @@ class TrackingService {
     _isTracking = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeyOnDuty, false);
+    await prefs.remove(TrackingPrefKeys.dutyStartedAt);
     await prefs.remove(_prefKeyLastLat);
     await prefs.remove(_prefKeyLastLng);
     await prefs.remove(_prefKeyLastSavedAt);
@@ -255,6 +257,15 @@ class TrackingService {
   Future<bool> isOnDuty() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_prefKeyOnDuty) ?? false;
+  }
+
+  /// Waktu (UTC) check-in sesi yang sedang berjalan menurut flag lokal;
+  /// null kalau tidak sedang bertugas atau flag dibuat versi app lama
+  /// (sebelum kunci ini ada).
+  Future<DateTime?> dutyStartedAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(TrackingPrefKeys.dutyStartedAt);
+    return raw == null ? null : DateTime.tryParse(raw)?.toUtc();
   }
 
   /// Dipanggil saat logout (lihat ProfileSayaController.logout) - PAKSA
@@ -279,6 +290,7 @@ class TrackingService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeyOnDuty, false);
     await prefs.remove(_prefKeyAbsensiUuid);
+    await prefs.remove(TrackingPrefKeys.dutyStartedAt);
     await prefs.remove(_prefKeyLastLat);
     await prefs.remove(_prefKeyLastLng);
     await prefs.remove(_prefKeyLastSavedAt);

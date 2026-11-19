@@ -10,4 +10,5 @@ class TrackingPrefKeys {
   static const lastSavedAt = 'tracking_last_saved_at';
   static const onDuty = 'tracking_on_duty';
   static const absensiUuid = 'tracking_absensi_uuid';
+  static const dutyStartedAt = 'tracking_duty_started_at';
 }

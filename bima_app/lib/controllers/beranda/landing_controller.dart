@@ -18,6 +18,7 @@ import '../../services/attendance_summary_service.dart';
 import '../../services/documents_service.dart';
 import '../../services/satpam_profile_service.dart';
 import '../../services/tracking_service.dart';
+import '../../services/workmanager_callback.dart';
 import '../pengumuman/pengumuman_controller.dart';
 import '../pesan/pesan_controller.dart';
 
@@ -83,9 +84,38 @@ class LandingController extends GetxController {
   final _checkoutGraceExpired = false.obs;
 
   Future<void> refreshStatus() async {
-    final tracked = await TrackingService().isOnDuty();
-    _checkoutGraceExpired.value = await _isPastCheckoutGrace();
+    var tracked = await TrackingService().isOnDuty();
+    final shifts = await AttendanceSummaryService().fetchShiftsToday();
+    if (tracked && await _isStaleSession(shifts)) {
+      // Sesi lokal berasal dari shift yang sudah lewat & tidak pernah
+      // di-checkout (mis. 18 Nov lupa/gagal check-out, lalu server menutup
+      // otomatis jadi "partial"). Jangan biarkan tombol Check-out tampil
+      // di shift baru: check-out itu akan menutup sesi lama di server.
+      await TrackingService().stopTracking();
+      await cancelBackgroundTracking();
+      tracked = false;
+    }
+    _checkoutGraceExpired.value = _isPastCheckoutGrace(shifts);
     isOnDuty.value = tracked && !_checkoutGraceExpired.value;
+  }
+
+  static const _maxDutyDuration = Duration(hours: 12);
+
+  /// Sesi on-duty lokal dianggap basi kalau sudah ada shift LAIN yang
+  /// dimulai setelah check-in sesi itu dan shift tersebut belum punya
+  /// `attendance` di server (artinya satpam belum check-in di shift itu).
+  Future<bool> _isStaleSession(List<Map<String, dynamic>> shifts) async {
+    final startedAt = await TrackingService().dutyStartedAt();
+    if (startedAt == null) return false;
+    // Shift maksimal 8 jam + toleransi/penutupan otomatis server (~2,25 jam
+    // setelah shift berakhir). Lewat batas ini sesi pasti sudah ditutup
+    // server, walau shift berikutnya belum mulai (jendela check-in baru
+    // buka 1 jam sebelum shift).
+    if (DateTime.now().toUtc().difference(startedAt) > _maxDutyDuration) return true;
+    final shift = _latestStartedShift(shifts);
+    final starts = shift == null ? null : DateTime.tryParse((shift['starts_at'] ?? '').toString())?.toUtc();
+    if (starts == null) return false;
+    return starts.isAfter(startedAt) && shift!['attendance'] == null;
   }
 
   /// Toleransi check-out: 60 menit setelah shift berakhir. Dipakai supaya
@@ -95,8 +125,7 @@ class LandingController extends GetxController {
   /// true. Dalam batas ini, "Check-out" tetap tampil selama belum checkout.
   static const _checkoutGrace = Duration(minutes: 60);
 
-  Future<bool> _isPastCheckoutGrace() async {
-    final shifts = await AttendanceSummaryService().fetchShiftsToday();
+  bool _isPastCheckoutGrace(List<Map<String, dynamic>> shifts) {
     final shift = _latestStartedShift(shifts);
     final ends = shift == null ? null : DateTime.tryParse((shift['ends_at'] ?? '').toString())?.toUtc();
     if (ends == null) return false;
