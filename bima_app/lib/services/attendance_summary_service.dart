@@ -88,6 +88,20 @@ class AttendanceSummaryService {
     return first is Map ? Map<String, dynamic>.from(first) : null;
   }
 
+  /// GET /attendance/:uuid -> satu record absensi. Null kalau gagal dimuat
+  /// (jaringan/404) — pemanggil jangan menyimpulkan apa-apa dari null.
+  Future<Map<String, dynamic>?> fetchById(String uuid) async {
+    try {
+      final response = await ApiService.to.get('/attendance/$uuid');
+      final ok = response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300;
+      final data = ok && response.body is Map ? response.body['data'] : null;
+      return data is Map ? Map<String, dynamic>.from(data) : null;
+    } catch (e) {
+      debugPrint('AttendanceSummaryService: gagal memuat /attendance/$uuid: $e');
+      return null;
+    }
+  }
+
   /// Jadwal shift hari ini (dari `shifts`) - dipakai AbsenCheckinController
   /// untuk menentukan pos yang benar-benar berlaku SEKARANG, bukan cuma
   /// pos pertama dari katalog `/posts?type=utama` yang tidak terikat

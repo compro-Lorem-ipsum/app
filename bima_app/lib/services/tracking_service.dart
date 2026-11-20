@@ -57,13 +57,16 @@ class TrackingService {
   /// check-in berhasil. GPS stream sesungguhnya berjalan di dalam Android
   /// foreground service (gps_task_handler.dart), bukan di sini, supaya
   /// tetap hidup walau layar mati.
-  Future<void> startTracking({required String absensiUuid}) async {
+  Future<void> startTracking({required String absensiUuid, String? attendanceUuid}) async {
     if (_isTracking) return;
     _isTracking = true;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeyOnDuty, true);
     await prefs.setString(_prefKeyAbsensiUuid, absensiUuid);
+    if (attendanceUuid != null && attendanceUuid.isNotEmpty) {
+      await prefs.setString(TrackingPrefKeys.attendanceUuid, attendanceUuid);
+    }
     await prefs.setString(TrackingPrefKeys.dutyStartedAt, DateTime.now().toUtc().toIso8601String());
 
     await _ensurePermissions();
@@ -242,16 +245,37 @@ class TrackingService {
   /// jadi titik GPS tidak ikut hilang dan otomatis ikut terkirim lagi
   /// (lengkap) di percobaan check-out berikutnya.
   Future<void> stopTracking() async {
-    await pauseCapture();
+    // Flag on-duty dibersihkan LEBIH DULU dan langkah lain dibungkus
+    // try/catch: kalau menghentikan foreground service / membersihkan
+    // antrian melempar error, check-out sudah terlanjur tercatat di
+    // server — flag yang nyangkut bikin Beranda besoknya tetap "Check-out".
     _isTracking = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeyOnDuty, false);
     await prefs.remove(TrackingPrefKeys.dutyStartedAt);
+    await prefs.remove(TrackingPrefKeys.attendanceUuid);
+    try {
+      await pauseCapture();
+    } catch (e) {
+      debugPrint('TrackingService: gagal menghentikan foreground service: $e');
+    }
     await prefs.remove(_prefKeyLastLat);
     await prefs.remove(_prefKeyLastLng);
     await prefs.remove(_prefKeyLastSavedAt);
     await prefs.remove(_prefKeyAccumDistance);
-    await QueueService().clearAll();
+    try {
+      await QueueService().clearAll();
+    } catch (e) {
+      debugPrint('TrackingService: gagal membersihkan antrian GPS: $e');
+    }
+  }
+
+  /// uuid record attendance sesi yang sedang berjalan (dari respons
+  /// check-in), dipakai untuk memverifikasi ke server apakah sudah
+  /// check-out. Null kalau tidak ada atau flag dibuat versi app lama.
+  Future<String?> attendanceUuid() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(TrackingPrefKeys.attendanceUuid);
   }
 
   Future<bool> isOnDuty() async {
@@ -291,6 +315,7 @@ class TrackingService {
     await prefs.setBool(_prefKeyOnDuty, false);
     await prefs.remove(_prefKeyAbsensiUuid);
     await prefs.remove(TrackingPrefKeys.dutyStartedAt);
+    await prefs.remove(TrackingPrefKeys.attendanceUuid);
     await prefs.remove(_prefKeyLastLat);
     await prefs.remove(_prefKeyLastLng);
     await prefs.remove(_prefKeyLastSavedAt);

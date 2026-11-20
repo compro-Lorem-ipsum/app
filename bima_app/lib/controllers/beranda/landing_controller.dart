@@ -75,31 +75,66 @@ class LandingController extends GetxController {
     ]);
   }
 
-  /// True kalau batas toleransi check-out (lihat [_checkoutGrace]) untuk
-  /// shift terakhir sudah lewat. Dipakai juga oleh display getter di bawah
-  /// supaya jam check-in shift yang sudah "dianggap lewat" itu tidak ikut
-  /// ditampilkan di kartu Status Hari ini — kalau tombolnya sudah balik ke
-  /// "Check-in" (shift baru), menampilkan jam check-in shift LAMA di
-  /// sampingnya cuma membingungkan pengguna (terlihat seperti kontradiksi).
-  final _checkoutGraceExpired = false.obs;
+  /// True kalau sesi lokal terakhir dibuang karena shift berikutnya sudah
+  /// mulai (lihat [_isStaleSession]). Dipakai display getter di bawah supaya
+  /// jam check-in shift LAMA tidak ikut tampil di kartu Status Hari ini
+  /// sementara tombolnya sudah balik ke "Check-in" (shift baru).
+  final _sessionStale = false.obs;
 
+  /// Tombol Check-out TIDAK punya batas waktu: selama satpam belum
+  /// check-out, tombolnya tetap "Check-out" sampai shift berikutnya mulai
+  /// (`starts_at` <= sekarang dan belum ada attendance-nya), baru berganti
+  /// ke "Check-in". Kalau sudah check-out, kembali ke alur normal.
   Future<void> refreshStatus() async {
     var tracked = await TrackingService().isOnDuty();
     final shifts = await AttendanceSummaryService().fetchShiftsToday();
-    if (tracked && await _isStaleSession(shifts)) {
-      // Sesi lokal berasal dari shift yang sudah lewat & tidak pernah
-      // di-checkout (mis. 18 Nov lupa/gagal check-out, lalu server menutup
-      // otomatis jadi "partial"). Jangan biarkan tombol Check-out tampil
-      // di shift baru: check-out itu akan menutup sesi lama di server.
+    _sessionStale.value = false;
+    if (tracked && await _isLegacyFlagWithoutOpenRecord(shifts)) {
+      // Flag buatan app versi lama (tanpa uuid/waktu check-in) yang nyangkut
+      // setelah check-out — tidak ada record terbuka di server.
       await TrackingService().stopTracking();
       await cancelBackgroundTracking();
       tracked = false;
     }
-    _checkoutGraceExpired.value = _isPastCheckoutGrace(shifts);
-    isOnDuty.value = tracked && !_checkoutGraceExpired.value;
+    if (tracked && await _isAlreadyCheckedOut()) {
+      // Server sudah mencatat check-out (mis. dari perangkat lain atau
+      // dikoreksi admin) tapi flag lokal masih menyala.
+      await TrackingService().stopTracking();
+      await cancelBackgroundTracking();
+      tracked = false;
+    }
+    if (tracked && await _isStaleSession(shifts)) {
+      // Shift berikutnya sudah mulai tapi sesi lama belum di-checkout
+      // (server menutupnya sebagai "partial"). Jangan biarkan Check-out
+      // tampil di shift baru: check-out itu akan menutup sesi lama di server.
+      await TrackingService().stopTracking();
+      await cancelBackgroundTracking();
+      tracked = false;
+      _sessionStale.value = true;
+    }
+    isOnDuty.value = tracked;
   }
 
-  static const _maxDutyDuration = Duration(hours: 12);
+  /// Flag lama tidak punya `attendanceUuid` maupun `dutyStartedAt`, jadi
+  /// tidak bisa diverifikasi per-record. Fallback: lihat record HARI INI —
+  /// kalau sudah check-out, atau server terjangkau (ada jadwal) tapi tidak
+  /// ada record terbuka, flag itu basi. Gagal memuat = tidak disimpulkan apa-apa.
+  Future<bool> _isLegacyFlagWithoutOpenRecord(List<Map<String, dynamic>> shifts) async {
+    if (await TrackingService().attendanceUuid() != null) return false;
+    if (await TrackingService().dutyStartedAt() != null) return false;
+    final record = await AttendanceSummaryService().fetchToday();
+    if (record != null) return record['checked_out_at'] != null;
+    return shifts.isNotEmpty;
+  }
+
+  /// Verifikasi ke server lewat GET /attendance/:uuid. Gagal memuat (offline,
+  /// uuid belum tersimpan) dianggap "belum diketahui", bukan sudah check-out.
+  Future<bool> _isAlreadyCheckedOut() async {
+    final uuid = await TrackingService().attendanceUuid();
+    if (uuid == null || uuid.isEmpty) return false;
+    final record = await AttendanceSummaryService().fetchById(uuid);
+    return record != null && record['checked_out_at'] != null;
+  }
 
   /// Sesi on-duty lokal dianggap basi kalau sudah ada shift LAIN yang
   /// dimulai setelah check-in sesi itu dan shift tersebut belum punya
@@ -107,34 +142,14 @@ class LandingController extends GetxController {
   Future<bool> _isStaleSession(List<Map<String, dynamic>> shifts) async {
     final startedAt = await TrackingService().dutyStartedAt();
     if (startedAt == null) return false;
-    // Shift maksimal 8 jam + toleransi/penutupan otomatis server (~2,25 jam
-    // setelah shift berakhir). Lewat batas ini sesi pasti sudah ditutup
-    // server, walau shift berikutnya belum mulai (jendela check-in baru
-    // buka 1 jam sebelum shift).
-    if (DateTime.now().toUtc().difference(startedAt) > _maxDutyDuration) return true;
     final shift = _latestStartedShift(shifts);
     final starts = shift == null ? null : DateTime.tryParse((shift['starts_at'] ?? '').toString())?.toUtc();
     if (starts == null) return false;
     return starts.isAfter(startedAt) && shift!['attendance'] == null;
   }
 
-  /// Toleransi check-out: 60 menit setelah shift berakhir. Dipakai supaya
-  /// tombol Check-out shift SEBELUMNYA tidak nyangkut selamanya kalau lupa
-  /// checkout — lewat batas ini, Beranda balik tampil "Check-in" (untuk
-  /// shift selanjutnya) walau flag lokal TrackingService.isOnDuty masih
-  /// true. Dalam batas ini, "Check-out" tetap tampil selama belum checkout.
-  static const _checkoutGrace = Duration(minutes: 60);
-
-  bool _isPastCheckoutGrace(List<Map<String, dynamic>> shifts) {
-    final shift = _latestStartedShift(shifts);
-    final ends = shift == null ? null : DateTime.tryParse((shift['ends_at'] ?? '').toString())?.toUtc();
-    if (ends == null) return false;
-    return DateTime.now().toUtc().isAfter(ends.add(_checkoutGrace));
-  }
-
   /// Shift hari ini yang `starts_at`-nya paling akhir tapi sudah lewat
-  /// (<= sekarang) — dianggap shift yang sedang/baru saja dijalani, dipakai
-  /// hanya untuk ambil `ends_at` di atas.
+  /// (<= sekarang) — dianggap shift yang sedang/baru saja dijalani.
   Map<String, dynamic>? _latestStartedShift(List<Map<String, dynamic>> shifts) {
     final now = DateTime.now().toUtc();
     Map<String, dynamic>? latest;
@@ -172,13 +187,10 @@ class LandingController extends GetxController {
   String get displayClient => (profile.value?['client'] as String?) ?? '-';
 
   /// Record hari ini untuk ditampilkan — null-kan kalau shift-nya belum
-  /// checkout TAPI batas toleransi check-out sudah lewat (lihat
-  /// [_checkoutGraceExpired]), supaya jam check-in shift yang sudah
-  /// dianggap lewat tidak nyangkut di kartu sementara tombolnya sendiri
-  /// sudah balik ke "Check-in".
+  /// checkout TAPI sesinya sudah dianggap basi (lihat [_sessionStale]).
   Map<String, dynamic>? get _displayAttendance {
     final record = todayAttendance.value;
-    if (record != null && record['checked_out_at'] == null && _checkoutGraceExpired.value) {
+    if (record != null && record['checked_out_at'] == null && _sessionStale.value) {
       return null;
     }
     return record;

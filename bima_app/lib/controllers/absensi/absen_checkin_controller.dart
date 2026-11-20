@@ -425,7 +425,9 @@ class AbsenCheckinController extends GetxController {
         resultData.value = {'data': body is Map ? body['data'] : null};
         final user = await AuthService().getUser();
         final satpamUuid = (user?['uuid'] as String?) ?? '';
-        await _afterAttendanceSuccess(satpamUuid);
+        final recordData = body is Map ? body['data'] : null;
+        final attendanceUuid = recordData is Map ? recordData['uuid']?.toString() : null;
+        await _afterAttendanceSuccess(satpamUuid, attendanceUuid: attendanceUuid);
         _showSuccessScreen();
         return;
       }
@@ -588,9 +590,9 @@ class AbsenCheckinController extends GetxController {
   /// Efek samping setelah absensi tercatat (baik sukses sungguhan maupun
   /// fallback offline): mulai tracking GPS saat check-in, atau hentikannya
   /// & bersihkan cache lokal saat check-out.
-  Future<void> _afterAttendanceSuccess(String satpamUuid) async {
+  Future<void> _afterAttendanceSuccess(String satpamUuid, {String? attendanceUuid}) async {
     if (isCheckIn) {
-      await TrackingService().startTracking(absensiUuid: satpamUuid);
+      await TrackingService().startTracking(absensiUuid: satpamUuid, attendanceUuid: attendanceUuid);
       await initializeBackgroundTracking();
     } else {
       // KHUSUS DEBUGGING: tulis peta rute GPS sesi ini ke file HTML lokal
