@@ -83,7 +83,10 @@ class FcmService {
   static Future<void> _ensureLocalNotificationsInitialized() async {
     if (_localNotificationsReady) return;
     await _localNotifications.initialize(
-      const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(),
+      ),
       onDidReceiveNotificationResponse: _handleNotificationTap,
     );
     _localNotificationsReady = true;

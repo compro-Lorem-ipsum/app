@@ -131,17 +131,20 @@ class RekanKerjaView extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Lokasi Penugasan Anda', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
-              const SizedBox(height: 2),
-              Text(
-                clientNama.isEmpty ? '-' : clientNama,
-                style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: primaryColor),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Lokasi Penugasan Anda', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                const SizedBox(height: 2),
+                Text(
+                  clientNama.isEmpty ? '-' : clientNama,
+                  style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: primaryColor),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 12),
           Row(
             children: [
               SvgPicture.asset('assets/icons/building_line.svg', width: 32, height: 32),

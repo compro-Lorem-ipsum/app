@@ -24,6 +24,7 @@ class ProfileSayaView extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             Expanded(
@@ -246,13 +247,15 @@ class ProfileSayaView extends StatelessWidget {
         children: [
           SvgPicture.asset(iconAsset, width: 22, height: 22),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
-              const SizedBox(height: 4),
-              Text(value, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                const SizedBox(height: 4),
+                Text(value, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black)),
+              ],
+            ),
           ),
         ],
       ),
@@ -367,13 +370,17 @@ class ProfileSayaView extends StatelessWidget {
               style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: bold ? greyText : Colors.black),
             ),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: bold ? 14 : 12,
-              fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
-              color: Colors.black,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: bold ? 14 : 12,
+                fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
+                color: Colors.black,
+              ),
             ),
           ),
         ],

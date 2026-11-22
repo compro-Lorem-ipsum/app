@@ -3,6 +3,7 @@
 // /requests). Field tampilan (type/status) berbahasa Indonesia dipetakan
 // dari/ke enum API (cuti|lembur, pending|accepted|rejected).
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
@@ -149,24 +150,81 @@ class PengajuanController extends GetxController {
     );
   }
 
-  Future<void> pickTanggalMulai(BuildContext context) async {
-    final picked = await showDatePicker(
+  Future<DateTime?> _pickAdaptiveDate(BuildContext context, {required DateTime initialDate}) async {
+    final firstDate = DateTime(DateTime.now().year - 1);
+    final lastDate = DateTime(DateTime.now().year + 2, 12, 31);
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      DateTime tempPicked = initialDate;
+      return showCupertinoModalPopup<DateTime>(
+        context: context,
+        builder: (ctx) => Container(
+          height: 300,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: Color(0x1A000000))),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: Text('Batal', style: AppText.regular.copyWith(fontSize: 14, color: AppColors.disabled)),
+                      ),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.of(ctx).pop(tempPicked),
+                        child: Text('Pilih', style: AppText.semiBold.copyWith(fontSize: 14, color: AppColors.primary)),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: CupertinoDatePicker(
+                    mode: CupertinoDatePickerMode.date,
+                    initialDateTime: initialDate,
+                    minimumDate: firstDate,
+                    maximumDate: lastDate,
+                    onDateTimeChanged: (val) => tempPicked = val,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return showDatePicker(
       context: context,
-      initialDate: tanggalMulai.value ?? DateTime.now(),
-      firstDate: DateTime(DateTime.now().year - 1),
-      lastDate: DateTime(DateTime.now().year + 2),
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
       builder: _datePickerTheme,
+    );
+  }
+
+  Future<void> pickTanggalMulai(BuildContext context) async {
+    final picked = await _pickAdaptiveDate(
+      context,
+      initialDate: tanggalMulai.value ?? DateTime.now(),
     );
     if (picked != null) tanggalMulai.value = picked;
   }
 
   Future<void> pickTanggalSelesai(BuildContext context) async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await _pickAdaptiveDate(
+      context,
       initialDate: tanggalSelesai.value ?? tanggalMulai.value ?? DateTime.now(),
-      firstDate: DateTime(DateTime.now().year - 1),
-      lastDate: DateTime(DateTime.now().year + 2),
-      builder: _datePickerTheme,
     );
     if (picked != null) tanggalSelesai.value = picked;
   }

@@ -4,6 +4,7 @@
 // dropdown, gaya kotak putih + placeholder abu-abu sesuai desain Figma.
 
 import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/patroli/report_patroli_controller.dart';
@@ -59,12 +60,13 @@ class ReportPatroliView extends GetView<ReportPatroliController> {
 
               // ===== LOKASI POS =====
               Obx(() => _buildDropdownField(
+                    context: context,
                     floatingLabel: "Lokasi Pos",
                     hint: "Pilih Pos",
                     value: controller.selectedPos.value.isEmpty ? null : controller.selectedPos.value,
                     items: controller.listPos
                         .map<DropdownMenuItem<String>>(
-                          (p) => DropdownMenuItem(value: p['uuid'], child: Text(p['nama'])),
+                          (p) => DropdownMenuItem(value: p['uuid']?.toString(), child: Text((p['nama'] ?? '').toString())),
                         )
                         .toList(),
                     onChanged: controller.listPos.isEmpty
@@ -78,6 +80,7 @@ class ReportPatroliView extends GetView<ReportPatroliController> {
 
               // ===== STATUS LOKASI =====
               Obx(() => _buildDropdownField(
+                    context: context,
                     hint: "Status Lokasi",
                     value: controller.status.value.isEmpty ? null : controller.status.value,
                     items: const [
@@ -210,33 +213,55 @@ class ReportPatroliView extends GetView<ReportPatroliController> {
   }
 
   Widget _buildDropdownField({
+    required BuildContext context,
     String? floatingLabel,
     required String hint,
     required String? value,
     required List<DropdownMenuItem<String>> items,
     required ValueChanged<String?>? onChanged,
   }) {
-    final field = Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButtonFormField<String>(
-          value: value,
-          isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.disabled),
-          style: AppText.regular.copyWith(fontSize: 12, color: Colors.black),
-          decoration: const InputDecoration(
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.symmetric(vertical: 14),
-          ),
-          hint: Text(hint, style: AppText.regular.copyWith(fontSize: 12, color: AppColors.disabled)),
-          items: items,
-          onChanged: onChanged,
+    String? selectedLabel;
+    for (final item in items) {
+      if (item.value == value && item.child is Text) {
+        selectedLabel = (item.child as Text).data;
+        break;
+      }
+    }
+
+    final field = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onChanged == null || items.isEmpty
+          ? null
+          : () => _showAdaptivePicker(
+                context: context,
+                title: floatingLabel ?? hint,
+                currentValue: value,
+                items: items,
+                onSelected: onChanged,
+              ),
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                selectedLabel ?? hint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.regular.copyWith(
+                  fontSize: 13,
+                  color: selectedLabel == null ? AppColors.disabled : Colors.black,
+                ),
+              ),
+            ),
+            const Icon(Icons.keyboard_arrow_down, color: AppColors.disabled),
+          ],
         ),
       ),
     );
@@ -262,6 +287,107 @@ class ReportPatroliView extends GetView<ReportPatroliController> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAdaptivePicker({
+    required BuildContext context,
+    required String title,
+    required String? currentValue,
+    required List<DropdownMenuItem<String>> items,
+    required ValueChanged<String?> onSelected,
+  }) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+    if (isIOS) {
+      showCupertinoModalPopup<void>(
+        context: context,
+        builder: (ctx) => CupertinoActionSheet(
+          title: Text(title, style: AppText.semiBold.copyWith(fontSize: 13, color: AppColors.disabled)),
+          actions: items.map((item) {
+            final label = item.child is Text ? ((item.child as Text).data ?? '') : '${item.value}';
+            final isSelected = item.value == currentValue;
+            return CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                onSelected(item.value);
+              },
+              child: Text(
+                label,
+                style: AppText.regular.copyWith(
+                  fontSize: 16,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: AppColors.primary,
+                ),
+              ),
+            );
+          }).toList(),
+          cancelButton: CupertinoActionSheetAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Batal', style: AppText.semiBold.copyWith(fontSize: 16, color: const Color(0xFFA70202))),
+          ),
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(color: AppColors.fieldBorder, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Text(title, style: AppText.semiBold.copyWith(fontSize: 15, color: Colors.black)),
+              ),
+              const SizedBox(height: 4),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: items.map((item) {
+                      final label = item.child is Text ? ((item.child as Text).data ?? '') : '${item.value}';
+                      final isSelected = item.value == currentValue;
+                      return ListTile(
+                        title: Text(
+                          label,
+                          style: AppText.regular.copyWith(
+                            fontSize: 14,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            color: isSelected ? AppColors.primary : Colors.black,
+                          ),
+                        ),
+                        trailing: isSelected ? const Icon(Icons.check, color: AppColors.primary, size: 20) : null,
+                        onTap: () {
+                          Navigator.of(ctx).pop();
+                          onSelected(item.value);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

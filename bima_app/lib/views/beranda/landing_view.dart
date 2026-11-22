@@ -39,6 +39,7 @@ class LandingView extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             Expanded(
@@ -86,16 +87,19 @@ class LandingView extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Selamat Pagi', style: AppText.regular.copyWith(fontSize: 14, color: AppColors.disabled)),
-            const SizedBox(height: 4),
-            Text(controller.displayNama, style: AppText.bold.copyWith(fontSize: 16, color: AppColors.primary)),
-            const SizedBox(height: 4),
-            Text('NIP ${controller.displayNip} · ${controller.displayJabatan}', style: AppText.regular.copyWith(fontSize: 14, color: AppColors.disabled)),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Selamat Pagi', style: AppText.regular.copyWith(fontSize: 14, color: AppColors.disabled)),
+              const SizedBox(height: 4),
+              Text(controller.displayNama, style: AppText.bold.copyWith(fontSize: 16, color: AppColors.primary)),
+              const SizedBox(height: 4),
+              Text('NIP ${controller.displayNip} · ${controller.displayJabatan}', style: AppText.regular.copyWith(fontSize: 14, color: AppColors.disabled)),
+            ],
+          ),
         ),
+        const SizedBox(width: 12),
         GestureDetector(
           // await lalu refresh - LandingController tidak ter-dispose saat
           // Profil Saya dibuka di atasnya (masih di stack navigasi bawah),
@@ -210,28 +214,46 @@ class LandingView extends StatelessWidget {
   }
 
   Widget _buildFeatureGrid(List<_Feature> features) {
+    final firstRow = features.take(4).toList();
+    final secondRow = features.skip(4).take(4).toList();
     return CardContainer(
-      child: GridView.count(
-        crossAxisCount: 4,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 8,
-        childAspectRatio: 0.8,
-        children: features.map((f) => _buildFeatureItem(f)).toList(),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < firstRow.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                Expanded(child: _buildFeatureItem(firstRow[i])),
+              ],
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < secondRow.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                Expanded(child: _buildFeatureItem(secondRow[i])),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildFeatureItem(_Feature feature) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: feature.onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 50,
-            height: 50,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(15),
@@ -240,11 +262,13 @@ class LandingView extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             child: SvgPicture.asset(feature.iconAsset),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             feature.label,
             textAlign: TextAlign.center,
-            style: AppText.regular.copyWith(fontSize: 10, color: Colors.black),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.regular.copyWith(fontSize: 11, color: Colors.black, height: 1.25),
           ),
         ],
       ),

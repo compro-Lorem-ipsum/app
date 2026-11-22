@@ -73,7 +73,7 @@ class LoginView extends GetView<LoginController> {
                                 onTap: controller.toggleRememberMe,
                                 child: Row(
                                   children: [
-                                    Obx(() => Checkbox(
+                                    Obx(() => Checkbox.adaptive(
                                           value: controller.rememberMe.value,
                                           onChanged: (_) => controller.toggleRememberMe(),
                                           activeColor: AppColors.primary,

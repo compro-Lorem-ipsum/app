@@ -101,24 +101,34 @@ class LupaPasswordPart2View extends GetView<LupaPasswordController> {
   }
 
   Widget _buildOtpBox(int index) {
-    return SizedBox(
-      width: 45,
-      height: 55,
-      child: TextField(
-        controller: controller.otpControllers[index],
-        focusNode: controller.otpFocusNodes[index],
-        onChanged: (value) => controller.handleOtpChanged(index, value),
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.number,
-        maxLength: 1,
-        style: AppText.semiBold.copyWith(fontSize: 18, color: Colors.black),
-        decoration: InputDecoration(
-          counterText: '',
-          filled: true,
-          fillColor: AppColors.fieldFill,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.fieldBorder)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.fieldBorder)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
+    return Expanded(
+      child: Padding(
+        padding: EdgeInsets.only(right: index == 5 ? 0 : 8),
+        child: SizedBox(
+          height: 55,
+          child: TextField(
+            controller: controller.otpControllers[index],
+            focusNode: controller.otpFocusNodes[index],
+            onChanged: (value) => controller.handleOtpChanged(index, value),
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            textInputAction: index == 5 ? TextInputAction.done : TextInputAction.next,
+            maxLength: 1,
+            cursorColor: AppColors.primary,
+            cursorWidth: 1.8,
+            cursorRadius: const Radius.circular(2),
+            style: AppText.semiBold.copyWith(fontSize: 18, color: Colors.black),
+            decoration: InputDecoration(
+              counterText: '',
+              filled: true,
+              fillColor: AppColors.fieldFill,
+              contentPadding: EdgeInsets.zero,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.fieldBorder)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.fieldBorder)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
+            ),
+          ),
         ),
       ),
     );

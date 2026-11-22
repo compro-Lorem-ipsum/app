@@ -36,7 +36,7 @@ class PanicAlertNotificationService {
 
   Future<void> init() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: androidSettings);
+    const settings = InitializationSettings(android: androidSettings, iOS: DarwinInitializationSettings());
     await _plugin.initialize(
       settings,
       onDidReceiveNotificationResponse: _handleResponse,

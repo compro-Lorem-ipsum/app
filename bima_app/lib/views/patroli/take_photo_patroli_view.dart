@@ -72,7 +72,7 @@ class TakePhotoPatroliView extends StatelessWidget {
                           fit: BoxFit.cover,
                           cacheWidth: 600,
                         )
-                      else
+                      else if (controller.cameraController?.value.previewSize != null)
                         // Tampilan Kamera Live
                         FittedBox(
                           fit: BoxFit.cover,
@@ -81,7 +81,9 @@ class TakePhotoPatroliView extends StatelessWidget {
                             height: controller.cameraController!.value.previewSize!.width,
                             child: CameraPreview(controller.cameraController!),
                           ),
-                        ),
+                        )
+                      else
+                        CameraPreview(controller.cameraController!),
                     ],
                   );
                 }),

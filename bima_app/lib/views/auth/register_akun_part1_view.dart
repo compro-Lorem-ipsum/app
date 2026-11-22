@@ -1,5 +1,6 @@
 // Tampilan langkah 1 pendaftaran akun.
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/auth/register_akun_part1_controller.dart';
@@ -174,7 +175,13 @@ class _AsalDaerahPickerSheetState extends State<_AsalDaerahPickerSheet> {
                 controller: _searchController,
                 onChanged: _onSearchChanged,
                 autofocus: true,
-                style: AppText.regular.copyWith(fontSize: 12, color: Colors.black),
+                textInputAction: TextInputAction.search,
+                cursorColor: AppColors.primary,
+                cursorWidth: Theme.of(context).platform == TargetPlatform.iOS ? 1.8 : 2.0,
+                cursorRadius: Theme.of(context).platform == TargetPlatform.iOS ? const Radius.circular(2) : Radius.zero,
+                selectionControls: Theme.of(context).platform == TargetPlatform.iOS ? cupertinoTextSelectionControls : materialTextSelectionControls,
+                onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                style: AppText.regular.copyWith(fontSize: 13, color: Colors.black),
                 decoration: InputDecoration(
                   hintText: 'Cari kota / kabupaten...',
                   hintStyle: AppText.regular.copyWith(fontSize: 12, color: AppColors.disabled),

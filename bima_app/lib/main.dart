@@ -15,6 +15,7 @@ import 'services/panic_alert_notification_service.dart';
 import 'services/panic_alert_polling_service.dart';
 
 // Import views
+import 'views/auth/splash_intro_view.dart';
 import 'views/auth/login_view.dart';
 import 'views/auth/lupa_password_part1_view.dart';
 import 'views/auth/lupa_password_part2_view.dart';
@@ -126,33 +127,54 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   @override
-  void initState() {
-    super.initState();
-    final payload = widget.pendingNotificationPayload;
-    if (payload != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        PanicAlertNotificationService.navigateFromPayload(payload);
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(fontFamily: 'Poppins'),
-      initialRoute: widget.initialRoute,
+      theme: ThemeData(
+        fontFamily: 'Poppins',
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF122C93),
+          primary: const Color(0xFF122C93),
+          brightness: Brightness.light,
+        ),
+        textSelectionTheme: const TextSelectionThemeData(
+          cursorColor: Color(0xFF122C93),
+          selectionColor: Color(0x33122C93),
+          selectionHandleColor: Color(0xFF122C93),
+        ),
+      ),
+      initialRoute: '/splash',
       smartManagement: SmartManagement.full,
       // Supaya tombol back Android meminimalkan (bukan menutup) app selama
       // foreground service GPS tracking aktif — lihat tracking_service.dart.
-      builder: (context, child) => WithForegroundTask(child: child ?? const SizedBox.shrink()),
+      // Listener onPointerDown menutup keyboard di iOS/Android saat pengguna
+      // mengetuk area kosong di luar input teks.
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            textScaler: mediaQuery.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.15),
+          ),
+          child: WithForegroundTask(child: child ?? const SizedBox.shrink()),
+        );
+      },
       getPages: [
+        GetPage(
+          name: '/splash',
+          page: () => SplashIntroView(
+            nextRoute: widget.initialRoute,
+            pendingNotificationPayload: widget.pendingNotificationPayload,
+          ),
+          transition: Transition.fadeIn,
+        ),
         GetPage(
           name: '/login',
           page: () => const LoginView(),
           binding: BindingsBuilder(() {
             Get.lazyPut(() => LoginController());
           }),
+          transition: Transition.fadeIn,
+          transitionDuration: const Duration(milliseconds: 350),
         ),
         GetPage(
           name: '/lupa-password-part1',

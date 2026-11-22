@@ -86,15 +86,17 @@ class AbsenCheckinView extends StatelessWidget {
             child: const Icon(Icons.person, color: primaryColor, size: 30),
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(controller.displayNama, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black)),
-              const SizedBox(height: 4),
-              Text('NIP ${controller.displayNip}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
-              const SizedBox(height: 2),
-              Text(controller.displayClient, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(controller.displayNama, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black)),
+                const SizedBox(height: 4),
+                Text('NIP ${controller.displayNip}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+                const SizedBox(height: 2),
+                Text(controller.displayClient, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: greyText)),
+              ],
+            ),
           ),
         ],
       ),
@@ -301,11 +303,15 @@ class AbsenCheckinView extends StatelessWidget {
   }
 
   Widget _buildLiveCameraPreview(CameraController cameraController) {
+    final previewSize = cameraController.value.previewSize;
+    if (previewSize == null) {
+      return CameraPreview(cameraController);
+    }
     return FittedBox(
       fit: BoxFit.cover,
       child: SizedBox(
-        width: cameraController.value.previewSize!.height,
-        height: cameraController.value.previewSize!.width,
+        width: previewSize.height,
+        height: previewSize.width,
         child: CameraPreview(cameraController),
       ),
     );

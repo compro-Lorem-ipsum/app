@@ -125,7 +125,10 @@ Future<void> _runPanicAlertHeartbeat() async {
 
     final notifications = FlutterLocalNotificationsPlugin();
     await notifications.initialize(
-      const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(),
+      ),
     );
 
     for (final alert in newAlerts) {

@@ -136,7 +136,14 @@ class PengumumanView extends StatelessWidget {
                 children: [
                   const Icon(Icons.location_on_outlined, size: 14, color: disabledColor),
                   const SizedBox(width: 4),
-                  Text(announcement['location'], style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: disabledColor)),
+                  Expanded(
+                    child: Text(
+                      announcement['location'],
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: disabledColor),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ],

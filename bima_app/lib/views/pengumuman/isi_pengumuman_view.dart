@@ -151,9 +151,11 @@ class IsiPengumumanView extends StatelessWidget {
               children: [
                 const Icon(Icons.location_on_outlined, size: 16, color: primaryColor),
                 const SizedBox(width: 6),
-                Text(
-                  announcement['location'],
-                  style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black),
+                Expanded(
+                  child: Text(
+                    announcement['location'],
+                    style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black),
+                  ),
                 ),
               ],
             ),

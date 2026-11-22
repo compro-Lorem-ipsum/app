@@ -109,19 +109,21 @@ class PanicAlertView extends GetView<PanicAlertController> {
             children: [
               SvgPicture.asset('assets/icons/panic_avatar_icon.svg', width: 45, height: 45),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    controller.namaSatpam,
-                    style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    controller.nip,
-                    style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w400, fontSize: 10, color: abuColor),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      controller.namaSatpam,
+                      style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14, color: Colors.black),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      controller.nip,
+                      style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w400, fontSize: 10, color: abuColor),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

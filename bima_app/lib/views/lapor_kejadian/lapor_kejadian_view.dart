@@ -1,6 +1,7 @@
 // Tampilan halaman Laporan Kejadian.
 
 import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../controllers/lapor_kejadian/lapor_kejadian_controller.dart';
@@ -199,16 +200,26 @@ class LaporKejadianView extends StatelessWidget {
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: cardBorderColor),
       ),
-      child: TextField(
-        controller: controller.descriptionController,
-        maxLines: 5,
-        style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.black),
-        decoration: const InputDecoration(
-          hintText: 'Jelaskan kejadian yang sedang terjadi',
-          hintStyle: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: disabledColor),
-          contentPadding: EdgeInsets.all(16),
-          border: InputBorder.none,
-        ),
+      child: Builder(
+        builder: (context) {
+          final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+          return TextField(
+            controller: controller.descriptionController,
+            maxLines: 5,
+            cursorColor: primaryColor,
+            cursorWidth: isIOS ? 1.8 : 2.0,
+            cursorRadius: isIOS ? const Radius.circular(2) : Radius.zero,
+            selectionControls: isIOS ? cupertinoTextSelectionControls : materialTextSelectionControls,
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.black),
+            decoration: const InputDecoration(
+              hintText: 'Jelaskan kejadian yang sedang terjadi',
+              hintStyle: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: disabledColor),
+              contentPadding: EdgeInsets.all(16),
+              border: InputBorder.none,
+            ),
+          );
+        },
       ),
     );
   }

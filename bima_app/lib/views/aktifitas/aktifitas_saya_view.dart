@@ -24,6 +24,7 @@ class AktifitasSayaView extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             Padding(

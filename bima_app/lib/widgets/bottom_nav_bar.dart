@@ -39,33 +39,37 @@ class BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final index = _tabs.indexOf(active);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Container(
-      height: 60,
+      padding: EdgeInsets.only(bottom: bottomInset),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Color(0x1A000000))),
       ),
-      child: Stack(
-        children: [
-          // Indikator biru yang sliding mengikuti tab aktif.
-          AnimatedAlign(
-            duration: _animDuration,
-            curve: Curves.easeOut,
-            alignment: Alignment(2 * index / (_tabs.length - 1) - 1, -1),
-            child: FractionallySizedBox(
-              widthFactor: 1 / _tabs.length,
-              child: Container(height: 3, color: AppColors.primary),
+      child: SizedBox(
+        height: 60,
+        child: Stack(
+          children: [
+            // Indikator biru yang sliding mengikuti tab aktif.
+            AnimatedAlign(
+              duration: _animDuration,
+              curve: Curves.easeOut,
+              alignment: Alignment(2 * index / (_tabs.length - 1) - 1, -1),
+              child: FractionallySizedBox(
+                widthFactor: 1 / _tabs.length,
+                child: Container(height: 3, color: AppColors.primary),
+              ),
             ),
-          ),
-          Row(
-            children: [
-              Expanded(child: _item('assets/icons/nav_beranda.svg', 'Beranda', AppTab.beranda)),
-              Expanded(child: _item('assets/icons/nav_aktifitas.svg', 'Aktifitas', AppTab.aktifitas)),
-              Expanded(child: _item('assets/icons/nav_pesan.svg', 'Pesan', AppTab.pesan)),
-              Expanded(child: _item('assets/icons/nav_profile.svg', 'Profile', AppTab.profile)),
-            ],
-          ),
-        ],
+            Row(
+              children: [
+                Expanded(child: _item('assets/icons/nav_beranda.svg', 'Beranda', AppTab.beranda)),
+                Expanded(child: _item('assets/icons/nav_aktifitas.svg', 'Aktifitas', AppTab.aktifitas)),
+                Expanded(child: _item('assets/icons/nav_pesan.svg', 'Pesan', AppTab.pesan)),
+                Expanded(child: _item('assets/icons/nav_profile.svg', 'Profile', AppTab.profile)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -74,6 +78,7 @@ class BottomNavBar extends StatelessWidget {
     final isActive = tab == active;
     final color = isActive ? AppColors.primary : AppColors.disabled;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _go(tab),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
