@@ -10,6 +10,8 @@
 // lewat [setUploadError] supaya keterangannya tampil inline di halaman
 // ini — sesuai desain Figma node 44:1055 — bukan lewat notifikasi di
 // halaman password.
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -18,6 +20,8 @@ import 'package:image_picker/image_picker.dart';
 class RegisterAkunUploadFotoController extends GetxController {
   final currentStep = 3;
   final totalSteps = 4;
+
+  static const _maxPhotoBytes = 2 * 1024 * 1024;
 
   final hasPhoto = false.obs;
   final photoPath = ''.obs;
@@ -72,28 +76,44 @@ class RegisterAkunUploadFotoController extends GetxController {
     );
 
     final path = result?.files.single.path;
-    if (path != null) {
-      photoPath.value = path;
-      hasPhoto.value = true;
-      uploadError.value = '';
-    }
+    if (path != null) await _acceptPhoto(path);
   }
 
   Future<void> _pickFromCamera() async {
     try {
+      // Dikompres & diperkecil saat dipotret supaya hampir selalu < 2 MB;
+      // ukurannya tetap diverifikasi di _acceptPhoto.
       final photo = await ImagePicker().pickImage(
         source: ImageSource.camera,
         preferredCameraDevice: CameraDevice.front,
-        imageQuality: 90,
-        maxWidth: 1600,
+        imageQuality: 80,
+        maxWidth: 1280,
       );
       if (photo == null) return;
-      photoPath.value = photo.path;
-      hasPhoto.value = true;
-      uploadError.value = '';
+      await _acceptPhoto(photo.path);
     } catch (e) {
       uploadError.value = 'Kamera tidak dapat dibuka. Periksa izin kamera lalu coba lagi.';
     }
+  }
+
+  /// Terima foto hanya kalau <= [_maxPhotoBytes]; kalau lebih, tampilkan
+  /// peringatan dan biarkan foto sebelumnya (kalau ada) tetap dipakai.
+  Future<void> _acceptPhoto(String path) async {
+    final size = await File(path).length();
+    if (size > _maxPhotoBytes) {
+      Get.snackbar(
+        'Ukuran foto terlalu besar',
+        'Ukuran foto maksimal 2 MB. Foto Anda ${(size / (1024 * 1024)).toStringAsFixed(1)} MB.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      uploadError.value = 'Ukuran foto maksimal 2 MB. Pilih atau ambil foto lain.';
+      return;
+    }
+    photoPath.value = path;
+    hasPhoto.value = true;
+    uploadError.value = '';
   }
 
   void handleHapus() {
